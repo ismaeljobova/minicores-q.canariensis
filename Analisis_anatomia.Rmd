@@ -26,8 +26,7 @@ library(sjPlot)
 library(lmerTest)
 library(visreg)
 library(car)
-library(SPEI)
-library(lmtest)
+library(SPEI
 library(multcompView)
 library(cowplot)
 library(plyr)
@@ -3811,3 +3810,4 @@ season_climate_plots$Spring
 season_climate_plots$Summer
 
 ```
+
