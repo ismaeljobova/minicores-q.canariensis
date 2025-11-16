@@ -1,0 +1,3813 @@
+---
+title: "R_analisis"
+author: "Ismael Joaquín Borreguero Vázquez, Jose Luis Daza Baras"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r paquetes, include=FALSE}
+###se  cargan todos los paquetes
+library(glmmTMB)
+library(performance)
+library(ggplot2)
+library(readr)
+library(itsadug)
+library(data.table)
+library(moments)
+library(tidyverse)
+library(readODS)
+library(readxl)
+library(patchwork)
+library(lme4)
+library(effects)
+library(sjPlot)
+library(lmerTest)
+library(visreg)
+library(car)
+library(SPEI)
+library(lmtest)
+library(multcompView)
+library(cowplot)
+library(plyr)
+library(gamm4)
+library(DHARMa)
+library(MuMIn) ###para seleccionar modelo
+source("C:/Minicores/R_analisis/Analisis_anatomia/Anatomy_function.R") ##en windows
+```
+
+```{r clima, include=FALSE}
+gamir_prp <- read_csv("C:/Minicores/HOBO/precipitaciones/Gamirprcp2019-2022.csv")
+gamir_prp$date <- as.Date(gamir_prp$date)
+gamir_Nov2020_Feb2022<- gamir_prp[gamir_prp$date >= as.Date("2020-11-01") & gamir_prp$date <= as.Date("2022-02-28"),]
+gamir_Nov2020_Feb2022 <- gamir_Nov2020_Feb2022[names(gamir_Nov2020_Feb2022) %in% c("date","Prcp")]
+
+gamir_Nov2020_Feb2022$year_month <- format(gamir_Nov2020_Feb2022$date, "%Y-%m")
+
+group_month <- aggregate(Prcp ~ year_month, data = gamir_Nov2020_Feb2022, sum)
+group_month$date <- as.Date(paste(group_month$year_month,'-01',sep = "")) 
+
+prp_gamir <- ggplot(group_month, aes(as.Date(date, "%y-%m"), as.numeric(Prcp)))+
+  geom_bar(stat = "identity",
+           show.legend = FALSE,position = "dodge", fill= "#00BFFF")+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"))
+prp_gamir
+
+sum(gamir_Nov2020_Feb2022$Prcp)
+#HOBOS
+setwd("C:/Minicores/HOBO/Temperatura")
+
+Temp_gamir_Nov20_Feb21 <- read_excel("Gamir_Nov20_Feb21.xlsx")
+Temp_gamir_Feb21_Jun21 <- read_excel("Gamir_Feb21_Jun21.xlsx")
+Temp_gamir_Jun21_May22 <- read_excel("Gamir_Jun21_May22.xlsx")
+
+###le doy el formato de fecha
+Temp_gamir_Feb21_Jun21$date <- as.Date( Temp_gamir_Feb21_Jun21$`Fecha/hora (CET)`, "%m/%d/%y")
+Temp_gamir_Jun21_May22$date <- as.Date( Temp_gamir_Jun21_May22$`Fecha/hora (CET)`, "%y/%m/%d")
+
+
+###me quedo con la humedad relativa y la temperatura
+Temp_gamir_Feb21_May22 <- rbind(Temp_gamir_Feb21_Jun21,Temp_gamir_Jun21_May22)  
+
+Temp_gamir_Feb21_May22 <- Temp_gamir_Feb21_May22[names(Temp_gamir_Feb21_May22) %in% c("date" ,"Temperatura_(C)", "Humedad_relativa")]
+
+##calculo el SPD y el AVP
+Temp_gamir_Feb21_May22$SVP <- 0.6108 * exp((17.27 * Temp_gamir_Feb21_May22$`Temperatura_(C)`) / (Temp_gamir_Feb21_May22$`Temperatura_(C)` + 237.3))
+Temp_gamir_Feb21_May22$AVP <-  Temp_gamir_Feb21_May22$SVP * (Temp_gamir_Feb21_May22$Humedad_relativa / 100)
+Temp_gamir_Feb21_May22$VPD <-  Temp_gamir_Feb21_May22$SVP - Temp_gamir_Feb21_May22$AVP
+
+##hago la media diaria de los valores de temperatura, humedad, maximo y minimo de temperatura diaria
+dayly <- split(Temp_gamir_Feb21_May22, Temp_gamir_Feb21_May22$date)
+dayly <- lapply(dayly, function(x){
+  df <-  data.frame("Tmean" = mean(x$`Temperatura_(C)`), "Tmin" = min(x$`Temperatura_(C)`), "Tmax" = max(x$`Temperatura_(C)`), "VPD" = mean(x$VPD) )
+})
+x <- 0
+while(x < length(dayly)){
+  x <- x +1
+  dayly[[x]]$date <- names(dayly[x])
+}
+rm(x)
+Gamir <- do.call(rbind, Map(data.frame,dayly ) )
+
+Gamir$date <- as.Date(Gamir$date)
+
+HOBO_gamir <- data.frame("date" = Gamir$date, "VPD" = Gamir$VPD)
+Gamir$VPD <- NULL 
+##ahora le añado la temperatura desde noviembre
+Temp_gamir_Nov20_Feb21$Tmean <- rowMeans(Temp_gamir_Nov20_Feb21[, c("Tmin","Tmax")] , na.rm = T)
+Temp_gamir_Nov20_Feb21$date <- as.Date(Temp_gamir_Nov20_Feb21$date)
+
+Gamir <- rbind(Temp_gamir_Nov20_Feb21,Gamir)
+
+###sectorizo  las fechas tanto de prp como de temperatura
+Gamir_Nov21_Feb22_Temp <- Gamir[Gamir$date >= as.Date("2020-11-01") & Gamir$date <= as.Date("2022-02-28"),]
+Gamir_Nov21_Feb22_prp <- gamir_Nov2020_Feb2022[gamir_Nov2020_Feb2022$date >= as.Date("2020-11-01") & gamir_Nov2020_Feb2022$date <= as.Date("2022-02-28"),]
+
+# prp_gamir + geom_line(data=Gamir_Nov21_Feb22_Temp, aes(x= date,y= (Tmean)*5), color = "black", lwd= 0.9)+
+# geom_line(data=Gamir_Nov21_Feb22_Temp, aes(x= date,y= (Tmax)*5), color = "#FF3030", lwd= 0.9)+
+#   geom_line(data=Gamir_Nov21_Feb22_Temp, aes(x= date,y= (Tmin)*5), color = "#1C86EE", lwd= 0.9)+
+#   scale_y_continuous(
+#     name = "precipitation (mm)",
+#     breaks = c(25, 50, 75, 100, 125, 150, 175, 200),
+#     expand = c(0, 0),
+#     sec.axis = sec_axis(~ . / 5, name = "Temperature (ºC)",
+#                         breaks = c(-5, 0, 5, 10, 15, 20, 25, 30, 35, 40))) ###posible 
+# 
+
+###figura 2
+
+gamir_Nov2020_Feb2022$doy <- yday(gamir_Nov2020_Feb2022$date)
+
+ggplot()+
+  geom_bar(data=gamir_Nov2020_Feb2022, aes(date, as.numeric(Prcp)),stat = "identity",
+           show.legend = FALSE,position = "dodge", fill= "#00BFFF")+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"))+
+  scale_x_date(date_breaks = "1 month" ,date_labels = " ")+
+  ylab("precipitation (mm)")+
+  xlab(" ")
+
+temp <- ggplot() + geom_line(data=Gamir_Nov21_Feb22_Temp, aes(as.Date(date, "%y/%m/%d"), Tmean), color = "black", lwd= 0.9)+
+geom_line(data=Gamir_Nov21_Feb22_Temp, aes(as.Date(date, "%y/%m/%d"), Tmax), color = "#FF3030", lwd= 0.9)+
+  geom_line(data=Gamir_Nov21_Feb22_Temp, aes(as.Date(date, "%y/%m/%d"), Tmin), color = "#1C86EE", lwd= 0.9)+
+  scale_y_continuous(name="Temperature (ºC)",breaks= c(-5,0,5,10,15,20,25,30,35,40),
+                     expand = c(0,0))+
+  scale_x_date(date_breaks = "1 month" ,date_labels = " ")+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"))+
+  xlab(" ")
+temp
+
+####Humedad suelo
+
+Hum_suelo <- read_csv("C:/Minicores/HOBO/Humedad_suelo/Humedad_suelo_Gamir_Modificado.csv")
+nombre_columnas_fecha <- names(Hum_suelo)  ##cojo los nombres de la humedad de suelo (las fechas)
+nombre_columnas_fecha <- nombre_columnas_fecha[!(nombre_columnas_fecha %in% c("Site", "Plot","Point","Treatment","Depth")) ]#elimino las variables que no contemplo para este plot
+
+Hum_suelo <- reshape2::melt(Hum_suelo, id.vars=c("Site", "Plot","Point","Treatment","Depth"), 
+                     measure.vars= nombre_columnas_fecha, 
+                     value.name="values", 
+                     variable.name="date")
+Hum_suelo <- split(Hum_suelo, Hum_suelo$Treatment)
+
+
+Hum_suelo <- lapply(Hum_suelo, function(x){ values <- aggregate(x["values"], by=c( x["date"], x["Depth"]), mean, na.rm= T)
+error <- aggregate(x["values"], by=c( x["date"], x["Depth"]), se)
+x <- merge(values, error, by= c("date", "date","Depth", "Depth"))
+return(x)})
+
+Hum_suelo$Control$Treatment <- "control"
+Hum_suelo$Drought$Treatment <- "Drought"
+
+Hum_suelo <- rbind(Hum_suelo$Control, Hum_suelo$Drought)
+
+ggplot(data= Hum_suelo, aes(x= as.Date(date), y= values.x, color= Treatment))+
+  geom_line()+
+  facet_grid(. ~ Depth)
+  
+Hum_suelo <- split(Hum_suelo, Hum_suelo$Depth)
+Hum_suelo30 <- Hum_suelo$"30"
+
+
+plot_Hum_suelo_30 <-  ggplot(data =Hum_suelo30, aes(x= as.Date(date, "%d/%m/%y"),y=values.x, color= Treatment ) )+
+  geom_line(lwd=0.9, show.legend = F )+
+  scale_x_date(date_breaks = "1 month" ,date_labels = " ")+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"))+
+  scale_color_manual(values=c("#0000FF",'#CD3333'))+
+  geom_ribbon(alpha=.3,mapping = aes(x=as.Date(date, "%d/%m/%y"), ymin= values.x-values.y, ymax= values.x+values.y, fill=Treatment),colour= NA, show.legend = F)+
+  scale_fill_manual(values=c("#00EEEE",'#FF4040'))+
+  ylab("soil moisture (%)")+
+  xlab(" ")
+
+plot_Hum_suelo_30
+# plot_Hum_suelo_drought <- ggplot(data =Hum_suelo_drought, aes(x= as.Date(date, "%d/%m/%y"),y=mean_hum, color= as.factor(Depth) ) )+
+#   geom_line(lwd=0.9 )+
+#   scale_x_date(date_breaks = "1 month" ,date_labels = "%B")+
+#   theme(panel.background = element_rect(fill = "white"),
+#           axis.line.x = element_line(colour="black"),
+#           axis.line.y = element_line(colour="black"))+
+#   scale_color_manual(values=c('#FF4040', 'bisque3', '#C1CDCD', "aquamarine2"))
+
+
+
+###SPEI
+Gamir_Nov21_Feb22_Temp$PET <- hargreaves(Tmin=Gamir_Nov21_Feb22_Temp$Tmin, Tmax=Gamir_Nov21_Feb22_Temp$Tmax, lat= 36.569 )
+
+Gamir_Nov21_Feb22_Temp$prp <- Gamir_Nov21_Feb22_prp$Prcp
+
+Gamir21_CWL <- Gamir_Nov21_Feb22_Temp$prp - Gamir_Nov21_Feb22_Temp$PET
+spei1 <- spei(Gamir21_CWL, scale =1 )
+
+spei_data <- data.frame(
+  time = seq.Date(from = as.Date("2020-11-01"), by = "day", length.out = length(spei1$fitted)),
+  spei = spei1$fitted
+)
+
+
+spei_data$sing <- ifelse(as.numeric(spei_data$spei) >= 0, "pos", "neg") 
+
+SPEI_plot <- ggplot(spei_data, aes(x = time, y = spei, col = sing, fill = sing)) +
+  geom_bar(show.legend = F, stat = "identity") +
+  scale_color_manual(values = c("pos" = "darkblue", "neg" = "red")) +
+  scale_fill_manual(values = c("pos"  = "darkblue", "neg" = "red")) +
+  labs( x= " ", y = "SPEI") +
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"))+
+  scale_x_date(date_breaks = "1 month" ,date_labels = "%m")
+
+##VPD
+
+
+
+
+
+
+
+
+
+HOBO_gamir <- HOBO_gamir[HOBO_gamir$date >= as.Date("2020-11-01") & HOBO_gamir$date <= as.Date("2022-02-28"),]
+
+dayly_prp_gamir  <- ggplot()+
+  geom_line(data = HOBO_gamir, aes(x=date, y=VPD*10), color= "black", lwd=0.7, linetype= 8)+
+  geom_bar(data=gamir_Nov2020_Feb2022, aes(date, as.numeric(Prcp)),stat = "identity",
+           show.legend = FALSE,position = "dodge", fill= "#00BFFF")+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y.left = element_line(colour="black"),
+        axis.line.y.right = element_line(colour="black" ))+
+  scale_x_date(date_breaks = "1 month" ,date_labels = " ")+
+  scale_y_continuous(sec.axis = sec_axis(~(./10),name="VPD (Kpa)",breaks= c(1,2,3,4)),
+                     name = "precipitation (mm)",breaks = c(0,10,20,30,40), expand = c(0,0))+
+  xlab(" ") 
+
+##Plots
+
+
+plot_grid(temp,dayly_prp_gamir,plot_Hum_suelo_30,SPEI_plot, ncol = 1)
+
+
+```
+
+```{r Phenology canariensis_EW, include=FALSE}
+setwd("C:/Minicores/R_analisis")
+Qca_phenology <- read_excel_allsheets("Datos_Modificados_Qca.xlsx")
+Qca_phenology <- Qca_phenology[ names(Qca_phenology) != "ray_area"]
+Qca_phenology <- eliminar_filas_NA_lista(Qca_phenology, "N_vasos")
+Datos_pie <- read_ods("Datos_Pie.ods")
+Datos_pie <- split(Datos_pie, Datos_pie$Especie)
+Datos_pie_Qca <- Datos_pie$QUCA
+Datos_dendrometros <- read_ods("Datos_dendrometros.ods", col_names = FALSE)
+colnames(Datos_dendrometros) <-  Datos_dendrometros[1,]
+Datos_dendrometros <- Datos_dendrometros[-1,]
+ ###elimino las columnas y las fechas que no son interesantes para este analisis
+
+Qca_phenology <- Qca_phenology[!names(Qca_phenology) %in% c("9Sep21","26Aug21") ]
+Qca_phenology <- lapply(Qca_phenology, function(x) x[!(names(x) %in% c("Finca", "Especie","N_vasos", "TRW (mm) arriba", "TRW (mm) centro", "TRW (mm) Abajo",  "Area", "Feret", "escala 1 microm", "N_anillos"))])
+
+##añadimos una columna con las fechas del muestreo y cogemos las fechas de los dendrometros
+fechas <- c("02/02/2021", "18/03/2021","01/04/2021","15/04/2021","29/04/2021","10/06/2021","22/07/2021","10/08/2021","09/09/2021","14/10/2021","18/11/2021","16/12/2021","19/01/2022","08/02/2022")
+Qca_phenology <- mapply(cbind, Qca_phenology, "date"=as.Date(fechas, "%d/%m/%Y" ), SIMPLIFY=F)
+
+
+####junto datos del individuo (no se si meter el DBH de los dendrometros)
+Datos_pie_Qca <- Datos_pie_Qca[!names(Datos_pie_Qca) %in% c("Especie", "Finca", "DBH_(cm)","Tratam","Plot")]
+names(Datos_pie_Qca)[names(Datos_pie_Qca) == 'Árbol'] <- 'indv'
+
+Qca_phenology <- lapply(Qca_phenology, function(x) {merge(x,Datos_pie_Qca, by=c("indv"))})
+
+
+####empezamos a hacer los analisis con el inicio de la EW
+Qca_phenology_start_EW <-  list(Qca_phenology$"2Feb21", Qca_phenology$"18Marz2021", Qca_phenology$"1Abr2021", Qca_phenology$"15Abr2021", Qca_phenology$"29Abr21", Qca_phenology$"10Jun21")
+Qca_phenology_start_EW <- lapply(Qca_phenology_start_EW, function(x) x[!(names(x) %in% c("Completa_EW", "Inicio_LW"))])
+Qca_phenology_start_EW <- reduce(Qca_phenology_start_EW, rbind)
+Qca_phenology_start_EW$Inicio_EW <- tolower(Qca_phenology_start_EW$Inicio_EW)
+Qca_phenology_start_EW$Inicio_EW <- ifelse(Qca_phenology_start_EW$Inicio_EW == "si", 1, 0) ###se usa ifelse ya que se puede poner el combinado de si o no
+
+
+Qca_phenology_start_EW$date <- yday(Qca_phenology_start_EW$date) ##se reformula la fecha en DOY
+
+Qca_phenology_start_EW$Tratam <- as.factor(Qca_phenology_start_EW$Tratam)
+Qca_phenology_start_EW$Tratam1 <- ifelse(Qca_phenology_start_EW$Tratam == "Control", "0","1")
+Qca_phenology_start_EW$Plot <- as.factor(Qca_phenology_start_EW$Plot)
+Qca_phenology_start_EW$H_.cm. <- Qca_phenology_start_EW$`H_(cm)`
+Qca_phenology_start_EW$Diametro_copa_.cm. <- Qca_phenology_start_EW$`Diametro_copa_(cm)`
+vif(glm(data = Qca_phenology_start_EW, Inicio_EW ~ date + H_.cm.+ Diametro_copa_.cm.+ Tratam), family = "binomial") ##no hay colinealidad
+
+Qca_phenology_start_EW$date_z <- scale(Qca_phenology_start_EW$date)
+Qca_phenology_start_EW$H_z <- scale(Qca_phenology_start_EW$H_.cm.)
+Qca_phenology_start_EW$Dc_z <- scale(Qca_phenology_start_EW$Diametro_copa_.cm.)
+modelo1 <- glmmTMB(data = Qca_phenology_start_EW, Inicio_EW ~ date_z + H_z+ Dc_z+ Tratam + (1|Plot), family = binomial(link = "logit"))
+summary(modelo1)
+modelo2 <- glmmTMB(data = Qca_phenology_start_EW, Inicio_EW ~ date_z +H_z + Tratam + (1|Plot), family = binomial(link = "logit")) ###AIC  38.334
+# summary(modelo2)
+modelo3 <- glmmTMB(data = Qca_phenology_start_EW, Inicio_EW ~ date_z +H_z+ Dc_z+ (1|Plot), family = binomial(link = "logit"))
+summary(modelo3) 
+###AIC  37.679
+modelo4 <- glmmTMB(data = Qca_phenology_start_EW, Inicio_EW ~ date_z +H_z+ (1|Plot), family = binomial(link = "logit"))
+summary(modelo4)
+###AIC  36.938
+modelo5 <- glmmTMB(data = Qca_phenology_start_EW, Inicio_EW ~ date_z +H_z + (1|Plot), family = binomial(link = "logit"))
+summary(modelo5)
+###AIC  37.913
+modelo7<- glmmTMB(data = Qca_phenology_start_EW, Inicio_EW ~ date_z + Tratam + (1|Plot), family = binomial(link = "logit"))
+summary(modelo7)
+###AIC 37.347
+modelo8<- glmmTMB(data = Qca_phenology_start_EW, Inicio_EW ~ date_z + Dc_z+ (1|Plot), family = binomial(link = "logit"))
+summary(modelo8)
+###AIC 39.108
+modelo9<- glmmTMB(data = Qca_phenology_start_EW, Inicio_EW ~ date_z + Dc_z +Tratam+ (1|Plot), family =binomial(link = "logit"))
+summary(modelo9)
+###AIC 39.347
+anova(modelo1, modelo2, modelo3, modelo4, modelo5, modelo7, modelo8, modelo9, test="Chisq")
+model.sel(modelo1, modelo2, modelo3, modelo4, modelo5, modelo7,modelo8, modelo9) 
+
+
+r2(modelo3)
+
+
+####estadisticamente no es significativo este adelantamiento de la fenologia modelo 4,3,5 son los mas optimos, siendo el que tiene mayor simplicidad el modelo 4 el mas simple, por tanto elijo ese
+
+###graficarlo
+####control
+data.frame_control_predict_EW <- data.frame(
+  date_z = seq(min(Qca_phenology_start_EW$date_z), max(Qca_phenology_start_EW$date_z), length.out = 100),
+  H_z = 0,  # media (estandarizado)
+  Dc_z = 0, # media (estandarizado)
+  Plot = NA,  # glmmTMB ignora esto si no es necesario para predicción
+  Tratam= "Control"
+)
+predict_control_EW <- predict(modelo2, newdata = data.frame_control_predict_EW, type = "link", se.fit = TRUE)
+data.frame_control_predict_EW <- data.frame_control_predict_EW %>%
+  mutate(
+    fit_link = predict_control_EW$fit,
+    se = predict_control_EW$se.fit,
+    fit_resp = plogis(fit_link),  # transformar logit a probabilidad
+    lower = plogis(fit_link - 1.96 * se),
+    upper = plogis(fit_link + 1.96 * se)
+  )
+ggplot(data.frame_control_predict_EW, aes(x = date_z, y = fit_resp)) +
+  geom_line(color = "blue", size = 1) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.3, fill = "blue") +
+  labs(
+    x = "Fecha estandarizada (date_z)",
+    y = "Probabilidad predicha de Inicio_EW",
+    title = "Efecto de la fecha sobre el inicio de EW"
+  ) +
+  theme_minimal()
+
+#####sequia
+data.frame_sequia_predict_EW <- data.frame(
+  date_z = seq(min(Qca_phenology_start_EW$date_z), max(Qca_phenology_start_EW$date_z), length.out = 100),
+  H_z = 0,  # media (estandarizado)
+  Dc_z = 0, # media (estandarizado)
+  Plot = NA,  # glmmTMB ignora esto si no es necesario para predicción
+  Tratam= "Sequía"
+)
+predict_sequia_EW <- predict(modelo2, newdata = data.frame_sequia_predict_EW, type = "link", se.fit = TRUE)
+data.frame_sequia_predict_EW <- data.frame_sequia_predict_EW %>%
+  mutate(
+    fit_link = predict_sequia_EW$fit,
+    se = predict_sequia_EW$se.fit,
+    fit_resp = plogis(fit_link),  # transformar logit a probabilidad
+    lower = plogis(fit_link - 1.96 * se),
+    upper = plogis(fit_link + 1.96 * se)
+  )
+ggplot(data.frame_sequia_predict_EW, aes(x = date_z, y = fit_resp)) +
+  geom_line(color = "red", size = 1) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.3, fill = "red") +
+  labs(
+    x = "Fecha estandarizada (date_z)",
+    y = "Probabilidad predicha de Inicio_EW",
+    title = "Efecto de la fecha sobre el inicio de EW"
+  ) +
+  theme_minimal()
+
+
+
+##Plot
+#########tengo que reescalar las fechasfill
+##reescalo las fechas
+
+date_mean <- mean(Qca_phenology_start_EW$date)
+date_sd <- sd(Qca_phenology_start_EW$date)
+
+datos_unidos <- rbind(data.frame_sequia_predict_EW, data.frame_control_predict_EW)
+datos_unidos$date_original <- datos_unidos$date_z * date_sd + date_mean
+
+
+
+ggplot(datos_unidos, aes(x = date_original, y = fit_resp)) +
+  geom_line(aes(color = Tratam),  size = 1) +
+  geom_ribbon(aes(ymin = lower, ymax = upper, fill= Tratam), alpha = 0.3, ) +
+  scale_color_manual(values = c("blue","red"))+
+  scale_fill_manual(values = c("blue","red"))+
+  labs(
+    x = "Fecha",
+    y = "Probabilidad predicha de Inicio_EW",
+    title = "Efecto de la fecha sobre el inicio de EW"
+  ) +
+  theme_minimal()
+####plot
+
+simulateResiduals(modelo4, plot = T)
+
+
+
+```
+
+```{r Phenology canariensis_LW, include=FALSE}
+
+####empezamos a hacer los analisis con el inicio de la LW
+Qca_phenology_start_LW <-  list(Qca_phenology$"1Abr2021", Qca_phenology$"15Abr2021", Qca_phenology$"29Abr2021", Qca_phenology$"10Jun2021", Qca_phenology$"22Jul2021", Qca_phenology$"19AGOS_FENO")
+Qca_phenology_start_LW <- lapply(Qca_phenology_start_LW, function(x) x[!(names(x) %in% c("Inicio_EW", "Completa_EW"))])
+Qca_phenology_start_LW <- reduce(Qca_phenology_start_LW, rbind)
+Qca_phenology_start_LW$Inicio_LW <- tolower(Qca_phenology_start_LW$Inicio_LW)
+Qca_phenology_start_LW$Inicio_LW <- ifelse(Qca_phenology_start_LW$Inicio_LW == "si", 1, 0) ###se usa ifelse ya que se puede poner el combinado de si o no
+
+
+Qca_phenology_start_LW$date <- yday(Qca_phenology_start_LW$date) ##se reformula la fecha en DOY
+
+Qca_phenology_start_LW$Tratam1 <- ifelse(Qca_phenology_start_LW$Tratam == "Control", 1, 0) 
+Qca_phenology_start_LW$Tratam <- as.factor(Qca_phenology_start_LW$Tratam)
+Qca_phenology_start_LW$Plot <- as.factor(Qca_phenology_start_LW$Plot)
+Qca_phenology_start_LW <- Qca_phenology_start_LW[!(is.na(Qca_phenology_start_LW$Inicio_LW) |Qca_phenology_start_LW == " ") ,  ] ###elimino las filas que no me afectan para este calculo
+
+Qca_phenology_start_LW$date_z <- scale(Qca_phenology_start_LW$date)
+Qca_phenology_start_LW$H_z <- scale(Qca_phenology_start_LW$`H_(cm)`)
+Qca_phenology_start_LW$Dc_z <- scale(Qca_phenology_start_LW$`Diametro_copa_(cm)`)
+Qca_phenology_start_LW <- Qca_phenology_start_LW[complete.cases(Qca_phenology_start_LW$indv),]
+modelo1 <- glmmTMB(data = Qca_phenology_start_LW, Inicio_LW ~ date_z + H_z+ Dc_z+ Tratam + (1|Plot), family = binomial(link = "logit"))
+summary(modelo1)
+
+modelo2 <- glmmTMB(data = Qca_phenology_start_LW, Inicio_LW ~ date_z +H_z + Tratam+ (1|Plot), family = binomial(link = "logit"))
+
+modelo3 <- glmmTMB(data = Qca_phenology_start_LW, Inicio_LW ~ date_z +H_z+ Dc_z+ (1|Plot), family = binomial(link = "logit"))
+summary(modelo3) 
+
+modelo4 <- glmmTMB(data = Qca_phenology_start_LW, Inicio_LW ~ date_z +H_z+ (1|Plot), family = binomial(link = "logit"))
+summary(modelo4)
+
+modelo5 <- glmmTMB(data = Qca_phenology_start_LW, Inicio_LW ~ date_z +H_z + (1|Plot), family = binomial(link = "logit"))
+summary(modelo5)
+
+modelo6<- glmmTMB(data = Qca_phenology_start_LW, Inicio_LW ~ date_z + Tratam + (1|Plot), family = binomial(link = "logit"))
+summary(modelo7)
+
+modelo7<- glmmTMB(data = Qca_phenology_start_LW, Inicio_LW ~ date_z + Dc_z+ (1|Plot), family = binomial(link = "logit"))
+summary(modelo8)
+
+modelo8<- glmmTMB(data = Qca_phenology_start_LW, Inicio_LW ~ date_z + Dc_z +Tratam+ (1|Plot), family =binomial(link = "logit"))
+
+
+anova(modelo1, modelo2, modelo3, modelo4, modelo5, modelo6,modelo7, modelo8, test="Chisq")
+model.sel(modelo1, modelo2, modelo3, modelo4, modelo5, modelo6,modelo7, modelo8)
+#####mejor modelo es el 2 y 4, cojo el modelo 2, ya que es el más simple el 4. 
+simulateResiduals(modelo6, plot = T)
+
+data.frame_control_predict <- data.frame(Tratam="Control", 
+  date_z = seq(min(Qca_phenology_start_LW$date_z), max(Qca_phenology_start_LW$date_z), length.out = 100), Plot= 1) ##se genera el data frame para los predict
+predict_control <- predict(modelo6, type = "link", se.fit = TRUE, newdata = data.frame_control_predict ) ##se hace el predict del modelo
+
+
+
+###graficarlo
+####control
+Qca_phenology_start_LW <- Qca_phenology_start_LW[complete.cases(Qca_phenology_start_LW),]
+data.frame_control_predict_LW <- data.frame(
+  date_z = seq(min(Qca_phenology_start_LW$date_z), max(Qca_phenology_start_LW$date_z), length.out = 100),
+  H_z = 0,  # media (estandarizado)
+  Dc_z = 0, # media (estandarizado)
+  Plot = NA,  # glmmTMB ignora esto si no es necesario para predicción
+  Tratam= "Control"
+)
+predict_control_LW <- predict(modelo6, newdata = data.frame_control_predict_LW, type = "link", se.fit = TRUE)
+data.frame_control_predict_LW <- data.frame_control_predict_LW %>%
+  mutate(
+    fit_link = predict_control_LW$fit,
+    se = predict_control_LW$se.fit,
+    fit_resp = plogis(fit_link),  # transformar logit a probabilidad
+    lower = plogis(fit_link - 1.96 * se),
+    upper = plogis(fit_link + 1.96 * se)
+  )
+ggplot(data.frame_control_predict_LW, aes(x = date_z, y = fit_resp)) +
+  geom_line(color = "blue", size = 1) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.3, fill = "blue") +
+  labs(
+    x = "Fecha estandarizada (date_z)",
+    y = "Probabilidad predicha de Inicio_EW",
+    title = "Efecto de la fecha sobre el inicio de EW"
+  ) +
+  theme_minimal()
+
+#####sequia
+data.frame_sequia_predict_LW <- data.frame(
+  date_z = seq(min(Qca_phenology_start_LW$date_z), max(Qca_phenology_start_LW$date_z), length.out = 100),
+  H_z = 0,  # media (estandarizado)
+  Dc_z = 0, # media (estandarizado)
+  Plot = NA,  # glmmTMB ignora esto si no es necesario para predicción
+  Tratam= "Sequía"
+)
+predict_sequia_LW <- predict(modelo6, newdata = data.frame_sequia_predict_LW, type = "link", se.fit = TRUE)
+data.frame_sequia_predict_LW <- data.frame_sequia_predict_LW %>%
+  mutate(
+    fit_link = predict_sequia_LW$fit,
+    se = predict_sequia_LW$se.fit,
+    fit_resp = plogis(fit_link),  # transformar logit a probabilidad
+    lower = plogis(fit_link - 1.96 * se),
+    upper = plogis(fit_link + 1.96 * se)
+  )
+ggplot(data.frame_sequia_predict_LW, aes(x = date_z, y = fit_resp)) +
+  geom_line(color = "red", size = 1) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.3, fill = "red") +
+  labs(
+    x = "Fecha estandarizada (date_z)",
+    y = "Probabilidad predicha de Inicio_EW",
+    title = "Efecto de la fecha sobre el inicio de EW"
+  ) +
+  theme_minimal()
+
+
+##Plot
+#########tengo que reescalar las fechasfill
+##reescalo las fechas
+
+date_mean <- mean(Qca_phenology_start_LW$date)
+date_sd <- sd(Qca_phenology_start_LW$date)
+
+datos_unidos <- rbind(data.frame_sequia_predict_LW, data.frame_control_predict_LW)
+datos_unidos$date_original <- datos_unidos$date_z * date_sd + date_mean
+
+
+
+ggplot(datos_unidos, aes(x = date_original, y = fit_resp)) +
+  geom_line(aes(color = Tratam),  size = 1) +
+  geom_ribbon(aes(ymin = lower, ymax = upper, fill= Tratam), alpha = 0.3, ) +
+  scale_color_manual(values = c("blue","red"))+
+  scale_fill_manual(values = c("blue","red"))+
+  labs(
+    x = "Fecha",
+    y = "Probabilidad predicha de Inicio_EW",
+    title = "Efecto de la fecha sobre el inicio de EW"
+  ) +
+  theme_minimal()
+
+
+
+```
+
+```{r Análisis de 2020/2021 Qca, include=FALSE}
+##2020 EW
+setwd("C:/Minicores/Qca_Bruto/ImageJ/Tablas/a4-02-2021")
+name_documents <- list.files(pattern = '*.csv') ##hace una lista con todos los nombres de archivos csv de la carpeta
+Qca2020 <- lapply(name_documents, read_delim, delim = ',') #se abren los documentos seleccionados
+names(Qca2020) <- name_documents #conecta los nombre de la lista con los nombres de los documentos
+
+EW_2020 <- list("Qc2.20" = Qca2020$a2QcC4F21.csv[c(1,20), ],"Qc3.20" = Qca2020$b3QcC_4F21.csv[c(32,44, 48,49), ], "Qc5.20" =Qca2020$c5QcC4F21.csv[c(10,21,23,32,43,57,64), ], "Qc8.20" = Qca2020$d8QcC4F21.csv[c(1,3,9,18), ],"Qc9.20" = Qca2020$e9QcC4F21.csv[c(19), ],"Qc10.20" = Qca2020$f10QcC4F21.csv[c(7,18), ],"Qc18.20" = Qca2020$g18QcS4F21.csv[c(8), ],"Qc19.20" = Qca2020$h19QcS4F21.csv[c(1,3), ],"Qc26.20" = Qca2020$i26QcS4F21.csv[c(1,19,30,31), ],"Qc30.20" = Qca2020$j30QcCSF21.csv[c(14,30,42, 51,57), ], "Qc40.20" = Qca2020$k40QcC4F21.csv[c(1,8,27), ], "Qc44.20" = Qca2020$l44QcC4F21.csv[c(7,12,20,26,29), ],"Qc47.20" = Qca2020$m47QcS4F21.csv[c(1,2,12,13,42,43), ],"Qc52.20" = Qca2020$n52QcS4F21.csv[c(4,6,25,27,31,33,37,38,44), ]) #####se hace una lista con todos los vasos de EW del año 2020
+
+###Separamos entre control y sequia
+x <- 0
+while (x < length(EW_2020)) {
+  x <- x+1
+  nombre <- names(EW_2020[x])
+  EW_2020[[x]]$indv <- nombre
+  if((names(EW_2020[x]) == "Qc18.20") | (names(EW_2020[x]) == "Qc19.20") | (names(EW_2020[x]) == "Qc26.20") | (names(EW_2020[x]) == "Qc47.20") | (names(EW_2020[x]) == "Qc52.20")){EW_2020[[x]]$treatment <- "drought" }else{
+    EW_2020[[x]]$treatment <- "control"}
+}
+rm(x)
+
+EW_2020 <- lapply(EW_2020, function(x){x[c("indv", 'Area', 'Feret', "treatment")]})
+
+EW_2020_df <- do.call(rbind.data.frame, EW_2020)
+
+ggplot(data =EW_2020_df, aes(x= treatment, y= Area))+
+  geom_violin()+
+  geom_point()
+
+anova_area <- aov(data =EW_2020_df, Area~ treatment )
+summary(anova_area)
+
+EW_vessel_treatment <- split(EW_2020_df, EW_2020_df$treatment)
+
+##2021 EW
+setwd("C:/Minicores/Qca_Bruto/ImageJ/Tablas/l19-1-2022")
+name_documents <- list.files(pattern = '*.csv') ##hace una lista con todos los nombres de archivos csv de la carpeta
+Qca2021 <- lapply(name_documents, read_delim, delim = ',') #se abren los documentos seleccionados
+names(Qca2021) <- name_documents #conecta los nombre de la lista con los nombres de los documentos
+
+EW_2021 <- list("Qc2.21" = Qca2021$a2QcC19E22.csv[c(1,9,11,12,14,16,17,24,28,29,31,35,38,43,45), ],"Qc3.21" = Qca2021$b3QcC19E22.csv[c(1,29,30,35,55,58,59), ], "Qc5.21" =Qca2021$c5QcC19E22.csv[c(1,6,13,15,19,24,32,37,39,40), ], "Qc9.21" = Qca2021$d9QcC19E22.csv[c(18,27), ],"Qc18.21" = Qca2021$h18QcS19E22.csv[c(19,21,23,32,36), ],"Qc19.21" = Qca2021$i19QcS19E22.csv[c(1,23,36), ],"Qc30.21" = Qca2021$j30QcS19E22.csv[c(2,9,16,21,25), ], "Qc36.21" = Qca2021$k36QcC19E22.csv[c(1,6), ], "Qc40.21" = Qca2021$m40QcC19E22.csv[c(1,16,29), ], "Qc44.21" = Qca2021$n44QcC19E22.csv[c(5,10,19,42), ],"Qc47.21" = Qca2021$o47QcS19E22.csv[c(1,3,4), ],"Qc52.21" = Qca2021$r52QcS19E22.csv[c(7,13,21,29), ]) #####se hace una lista con todos los vasos de EW del año 2021
+
+
+x <- 0
+while (x < length(EW_2021)) {
+  x <- x+1
+  nombre <- names(EW_2021[x])
+  EW_2021[[x]]$indv <- nombre
+  if((names(EW_2021[x]) == "Qc18.21") | (names(EW_2021[x]) == "Qc19.21") | (names(EW_2021[x]) == "Qc26.21") | (names(EW_2021[x]) == "Qc47.21") | (names(EW_2021[x]) == "Qc52.21")){EW_2021[[x]]$treatment <- "drought" }else{
+    EW_2021[[x]]$treatment <- "control"}
+}
+rm(x)
+
+EW_2021 <- lapply(EW_2021, function(x){x[c("indv", 'Area', 'Feret', "treatment")]})
+
+EW_2021_df <- do.call(rbind.data.frame, EW_2021)
+
+ggplot(data =EW_2021_df, aes(x= treatment, y= as.numeric(Area)))+
+  geom_violin()
+
+anova_area <- aov(data =EW_2021_df, Area~ treatment )
+summary(anova_area)
+
+##junto los datos del 2020 y 2021
+
+EW20.21 <- rbind(EW_2020_df, EW_2021_df)
+
+EW20.21$Area_Feret <- 0.785*(EW20.21$Feret^2)
+ggplot(data =EW20.21, aes(x= treatment, y= Area_Feret))+
+  geom_boxplot()
+
+#######preguntar a lorena #######################
+qqnorm(EW20.21$Area)
+qqline(EW20.21$Area)
+shapiro.test(EW20.21$Area) ###no es normal
+hist(EW20.21$Area)
+
+
+skewness(EW20.21$Area, na.rm = TRUE) #veo que dispersion tiene los datos
+EW20.21$trans <- log10(EW20.21$Area) ##realizo la transformacion
+qqnorm(EW20.21$trans)
+qqline(EW20.21$trans)
+shapiro.test(EW20.21$trans) ###veo que mis datos ya son normales
+hist(EW20.21$trans)
+
+anova_area <- aov(data =EW20.21, Area~ treatment )
+summary(anova_area)
+
+aggregate(Area~ treatment,EW20.21, mean )
+aggregate(Area~ treatment,EW20.21, se )
+
+
+###numero de EW vessel por indv en el area
+Freqency_vessel <- as.data.frame(table(EW20.21$indv))
+Freqency_vessel$treatment <- ifelse(grepl( "Qc18", Freqency_vessel$Var1) | grepl( "Qc19", Freqency_vessel$Var1) | grepl( "Qc26", Freqency_vessel$Var1) | grepl( "Qc47", Freqency_vessel$Var1) | grepl( "Qc52", Freqency_vessel$Var1), "drought", "control" )
+
+ggplot(data =Freqency_vessel, aes(x= treatment, y= Freq))+
+  geom_violin()+
+  geom_point()
+
+qqnorm(Freqency_vessel$Freq)
+qqline(Freqency_vessel$Freq)
+shapiro.test(Freqency_vessel$Freq) ###veo que mis datos no son normales
+
+
+skewness(Freqency_vessel$Freq, na.rm = TRUE) #veo que dispersion tiene los datos
+Freqency_vessel$trans <- log10(Freqency_vessel$Freq) ##realizo la transformacion
+qqnorm(Freqency_vessel$trans)
+qqline(Freqency_vessel$trans)
+shapiro.test(Freqency_vessel$trans) ###veo que mis datos ya son normales
+hist(Freqency_vessel$trans)
+
+
+anova_freqvessel <- aov(data =Freqency_vessel, trans~ treatment )
+summary(anova_freqvessel)
+
+aggregate(Freq~ treatment,Freqency_vessel, mean )
+aggregate(Freq~ treatment,Freqency_vessel, se )
+
+##LW2020
+LW_2020 <- list("Qc2.20" = Qca2020$a2QcC4F21.csv[-c(1,2,3,5,7,20,8,13,19,10,25,30,36,39), ],"Qc3.20" = Qca2020$b3QcC_4F21.csv[-c(32,44, 48,49,20,42,34,14,41,43,35), ], "Qc5.20" =Qca2020$c5QcC4F21.csv[-c(10,21,23,32,43,57,64,57,62,60,38,50,53,20,25,35,54,63,58,52), ], "Qc8.20" = Qca2020$d8QcC4F21.csv[-c(1,3,9,18), ],"Qc9.20" = Qca2020$e9QcC4F21.csv[-c(4,7,19,33,38,48,51,55,54,56,20,14,8,10,12,16,25,20), ],"Qc10.20" = Qca2020$f10QcC4F21.csv[-c(7,18), ],"Qc18.20" = Qca2020$g18QcS4F21.csv[-c(8), ],"Qc19.20" = Qca2020$h19QcS4F21.csv[-c(1,3), ],"Qc26.20" = Qca2020$i26QcS4F21.csv[-c(1,19,30,31), ],"Qc30.20" = Qca2020$j30QcCSF21.csv[-c(14,30,42, 51,57,20,34,40,52,49,53,56,58,41,38), ], "Qc40.20" = Qca2020$k40QcC4F21.csv[-c(1,8,27), ], "Qc44.20" = Qca2020$l44QcC4F21.csv[-c(7,12,20,26,29), ],"Qc47.20" = Qca2020$m47QcS4F21.csv[-c(1,2,12,13,42,43), ],"Qc52.20" = Qca2020$n52QcS4F21.csv[-c(4,6,25,27,31,33,37,38,44), ]) #####se hace una lista con todos los vasos menos los de EW del año 2020
+
+
+x <- 0
+while (x < length(LW_2020)) {
+  x <- x+1
+  nombre <- names(LW_2020[x])
+  LW_2020[[x]]$indv <- nombre
+  if((names(LW_2020[x]) == "Qc18.20") | (names(LW_2020[x]) == "Qc19.20") | (names(LW_2020[x]) == "Qc26.20") | (names(LW_2020[x]) == "Qc47.20") | (names(LW_2020[x]) == "Qc52.20")){LW_2020[[x]]$treatment <- "drought" }else{
+    LW_2020[[x]]$treatment <- "control"}
+}
+rm(x)
+
+LW_2020 <- lapply(LW_2020, function(x){x[c("indv", 'Area', 'Feret', "treatment")]})
+
+LW_2020 <- do.call(rbind.data.frame, LW_2020)
+ggplot(LW_2020, aes(x= LW_2020$treatment, y=LW_2020$Area))+geom_boxplot()
+##LW2021
+
+LW_2021 <- list("Qc2.21" = Qca2021$a2QcC19E22.csv[-c(1,9,11,12,14,16,17,24,28,29,31,35,38,43,45), ],"Qc3.21" = Qca2021$b3QcC19E22.csv[-c(1,18,19,23,29,30,35,40,46,49,51,53,55,58,59,20,24,2,5,28,42,32), ], "Qc5.21" =Qca2021$c5QcC19E22.csv[-c(1,6,13,15,19,24,32,37,39,40), ], "Qc9.21" = Qca2021$d9QcC19E22.csv[-c(18,27), ],"Qc10.21" = Qca2021$e10QcC19E22.csv[-c(12,22,26,27,33), ],"Qc18.21" = Qca2021$h18QcS19E22.csv[-c(19,21,23,32,36), ],"Qc19.21" = Qca2021$i19QcS19E22.csv[-c(1,23,36), ],"Qc30.21" = Qca2021$j30QcS19E22.csv[-c(2,9,16,21,25), ], "Qc36.21" = Qca2021$k36QcC19E22.csv[-c(1,6), ], "Qc40.21" = Qca2021$m40QcC19E22.csv[-c(1,16,29), ], "Qc44.21" = Qca2021$n44QcC19E22.csv[-c(5,8,10,19,33,38,42,21,13,26,40,46), ],"Qc47.21" = Qca2021$o47QcS19E22.csv[-c(1,3,4), ],"Qc52.21" = Qca2021$r52QcS19E22.csv[-c(7,13,21,29), ]) #####se hace una lista con todos los vasos de EW del año 2021, ademas elimino los fallos que tiene en la lectura de algunos vasos de la LW
+
+
+x <- 0
+while (x < length(LW_2021)) {
+  x <- x+1
+  nombre <- names(LW_2021[x])
+  LW_2021[[x]]$indv <- nombre
+  if((names(LW_2021[x]) == "Qc18.21") | (names(LW_2021[x]) == "Qc19.21") | (names(LW_2021[x]) == "Qc26.21") | (names(LW_2021[x]) == "Qc47.21") | (names(LW_2021[x]) == "Qc52.21")){LW_2021[[x]]$treatment <- "drought" }else{
+    LW_2021[[x]]$treatment <- "control"}
+}
+rm(x)
+
+LW_2021 <- lapply(LW_2021, function(x){x[c("indv", 'Area', 'Feret', "treatment")]})
+
+LW_2021 <- do.call(rbind.data.frame, LW_2021)
+LW_2021$Area <- ifelse(LW_2021$Area > 0.8, NA, LW_2021$Area)
+LW_2021 <- LW_2021[complete.cases(LW_2021), ]
+ggplot(LW_2021, aes(x= as.factor(LW_2021$treatment), y= as.numeric(LW_2021$Area)))+geom_boxplot()
+
+
+
+##junto los datos del 2020 y 2021
+
+LW20.21 <- rbind(LW_2020, LW_2021)
+LW20.21$Area_Feret <- 0.785*(LW20.21$Feret^2)
+LW20.21$Area_Feret <- ifelse(LW20.21$Area_Feret > 100, NA, LW20.21$Area_Feret)
+ggplot(data =LW20.21, aes(x= treatment, y= Area_Feret))+
+  geom_boxplot()
+
+qqnorm(LW20.21$Area_Feret)
+qqline(LW20.21$Area_Feret)
+shapiro.test(LW20.21$Area_Feret) ###no es normal
+
+
+
+anova_area <- kruskal.test(data =LW20.21, Area_Feret~ treatment )
+anova_area
+
+aggregate(Area_Feret~ treatment,LW20.21, mean )
+aggregate(Area_Feret~ treatment,LW20.21, se )
+
+
+###numero de LW vessel por indv en el area
+Freqency_vessel <- as.data.frame(table(LW20.21$indv))
+Freqency_vessel$treatment <- ifelse(grepl( "Qc18", Freqency_vessel$Var1) | grepl( "Qc19", Freqency_vessel$Var1) |  grepl( "Qc47", Freqency_vessel$Var1) | grepl( "Qc52", Freqency_vessel$Var1), "drought", "control" )
+
+ggplot(data =Freqency_vessel, aes(x= treatment, y= Freq))+
+  geom_violin()
+
+aggregate(Freq~ treatment,Freqency_vessel, mean )
+aggregate(Freq~ treatment,Freqency_vessel, se )
+qqnorm(Freqency_vessel$Freq)
+qqline(Freqency_vessel$Freq)
+shapiro.test(Freqency_vessel$Freq)
+
+
+anova_freqvessel <- aov(data =Freqency_vessel, Freq~ treatment )
+summary(anova_freqvessel)
+
+
+
+###TRW
+TRW_2020 <- read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
+    sheet = "2Feb21")
+TRW_2021 <- read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
+    sheet = "19Ene22")
+
+TRW20.21 <- list(TRW_2020, TRW_2021)
+
+TRW20.21 <- lapply(TRW20.21, function(x){
+   df <- x[!(is.na(x$N_vasos) |x$N_vasos == " ") ,  ] ###elimino las filas que no me afectan para este calculo
+ 
+ df <- df[, ! names(df) %in% c("N_anillos","N_vasos","Feret", "Area", "Inicio_EW", "Finca", "escala 1 microm"), drop = F]
+ df$TRW_mean  <-  rowMeans(df[ ,names(df) %in% c("TRW (mm) arriba", "TRW (mm) centro", "TRW (mm) Abajo")], na.rm = T)
+ return(df)
+})
+
+TRW_2020 <- as.data.frame(TRW20.21[1])
+TRW_2021 <- as.data.frame(TRW20.21[2])
+
+ggplot(data = TRW_2021, aes(x= Tratam, y= TRW_mean ))+
+  geom_boxplot()
+
+shapiro.test(TRW_2020$TRW_mean) ##son normales
+shapiro.test(TRW_2021$TRW_mean) ##son normales
+leveneTest(y =TRW_2020$TRW_mean, group =TRW_2020$Tratam, center = "median") ###no hay evidencias significativas de que las varianzas sean diferentes , se cumple el supuesto de homogeneidad
+leveneTest(y =TRW_2021$TRW_mean, group =TRW_2021$Tratam, center = "median")
+
+TRW_2020_anova <- aov(data = TRW_2020, TRW_mean ~ Tratam + Plot)
+summary(TRW_2020_anova)
+
+TRW_2021_anova <- aov(data = TRW_2021, TRW_mean ~ Tratam + Plot)
+summary(TRW_2021_anova)
+
+aggregate(TRW_mean~ Tratam,TRW_2020, mean )
+aggregate(TRW_mean~ Tratam,TRW_2020, se )
+aggregate(TRW_mean~ Tratam,TRW_2021, mean )
+aggregate(TRW_mean~ Tratam,TRW_2021, se )
+
+#DBH y H
+DBH_H <- read_ods("C:/Minicores/R_analisis/Datos_Pie.ods")
+
+
+DBH_anova <- aov(data = DBH_H, `DBH_(cm)` ~ Tratam + Plot)
+summary(DBH_anova) ##no hay diferencias
+
+DBH_anova <- aov(data = DBH_H,  `H_(cm)` ~ Tratam + Plot)
+summary(DBH_anova) ##no hay diferencias
+
+aggregate(`DBH_(cm)`~ Tratam, DBH_H, mean )
+aggregate(`DBH_(cm)` ~ Tratam,DBH_H, se )
+aggregate( `H_(cm)`~ Tratam,DBH_H, mean )
+aggregate( `H_(cm)`~ Tratam,DBH_H, se )
+
+###ray area
+Ray_area <- read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
+    sheet = "ray_area")
+
+Ray_area <- Ray_area[!(is.na(Ray_area$Codigo) |Ray_area$Codigo == " ") ,  ] ###elimino las filas que no me afectan para este calculo
+
+ggplot()+ geom_boxplot(data = Ray_area, aes(x= Tratam, y= Ray_2021)) ###pregunta, ¿se puede mezclar estos datos?
+
+
+anova_ray_2020 <- aov(data= Ray_area, Ray_2020 ~ Tratam + Plot)
+summary(anova_ray_2020)
+
+anova_ray_2021 <- aov(data= Ray_area, Ray_2021 ~ Tratam + Plot)
+summary(anova_ray_2021)
+
+aggregate(Ray_2020~ Tratam, Ray_area, mean )
+aggregate(Ray_2020~ Tratam, Ray_area, se )
+aggregate(Ray_2021~ Tratam, Ray_area, mean )
+aggregate(Ray_2021~ Tratam, Ray_area, se )
+
+###prueba para poner junto 2020 y 2021
+ray2020 <- data.frame(  "Plot" = Ray_area$Plot, "Tratam" =Ray_area$Tratam  , "Codigo" = Ray_area$Codigo,    "Ray_2020" = Ray_area$Ray_2020 )
+ray2021 <- data.frame(  "Plot" = Ray_area$Plot, "Tratam" =Ray_area$Tratam  , "Codigo" = Ray_area$Codigo,    "Ray_2020" = Ray_area$Ray_2021 )
+ray_20.21 <- rbind(ray2020,ray2021)
+
+
+shapiro.test(ray_20.21$Ray_2020)
+qqnorm(ray_20.21$Ray_2020)
+qqline(ray_20.21$Ray_2020) ##no son normales los datos pero por muy poco, utilizo anova
+
+
+anova_ray <- aov(data= ray_20.21, Ray_2020 ~ Tratam + Plot)
+summary(anova_ray)
+
+aggregate(Ray_2020~ Tratam, ray_20.21, mean )
+aggregate(Ray_2020~ Tratam, ray_20.21, se )
+
+###EW vulnerability index
+EW_2020_feret <-lapply(EW_2020, function(x){  Feret_converter(x, "mm")}) ##primero convierto cada vaso en las variables relacionadas con Feret
+EW_2021_feret <-lapply(EW_2021, function(x){  Feret_converter(x, "mm")})
+
+Data_2020 <- read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
+    sheet = "2Feb21")
+Data_2021 <- read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
+     sheet = "19Ene22")
+
+EW_20.21_feret <- list("EW_2020_feret" =EW_2020_feret,"EW_2021_feret" = EW_2021_feret) ##junto los datos
+Data_20.21 <- list("Data_2020"= Data_2020, "Data_2021" = Data_2021)
+
+Data_20.21 <- lapply(Data_20.21, function(x){
+  df <- x[!(is.na(x$Area) |x$Area == " ") ,  ] 
+  df <- df[ ,c("indv", "Area")]
+  names(df)[2] <- "year_Total_area"
+return(df)
+}) ##modifico los datos para que contengan las mismas columnas
+
+
+EW_20.21_feret <- lapply(EW_20.21_feret, function(x){
+  z <- 0
+while(z < length(x)){
+  z <- z +1
+  x[[z]]$indv <- names(x[z])
+} ###hace que nos cree la columna de individuos
+
+df <- bind_rows(x) ###concentro todos los datos en un data frame
+
+df[c("1", "2")] <-  str_split_fixed(df$indv, ".20" , 2)
+df[c("1", "indv")] <- str_split_fixed(df$"1", ".21" , 2)
+df[c("1", "indv")] <- str_split_fixed(df$"1", "Qc" , 2)
+df <- df[ ,!names(df) %in% c("1", "2")]
+df$treatment <- ifelse(grepl( "18", df$indv) | grepl( "19", df$indv) |  grepl( "26", df$indv) |  grepl( "30", df$indv) | grepl( "47", df$indv) | grepl( "52", df$indv), "drought", "control" )
+return(df)
+}) ##hago la modificacion en la fila de indv para que tenga el identificador del individuo
+
+
+EW_20.21_feret$EW_2020_feret <-  merge(EW_20.21_feret$EW_2020_feret, Data_20.21$Data_2020, by= c("indv", "indv")) ##se unen los datos de ambos data frames
+EW_20.21_feret$EW_2021_feret <-  merge(EW_20.21_feret$EW_2021_feret, Data_20.21$Data_2021, by= c("indv", "indv"))
+
+EW_20.21_vul_index <- lapply(EW_20.21_feret, function(x){
+  listas_xindv <-  split(x, x$indv)
+  
+  df <- lapply(listas_xindv, function(y){
+    y$n_vessel <- nrow(y)
+    y$vessel_frequency <- y$n/y$year_Total_area
+    y$vul_index <- y$Dmean/y$vessel_frequency
+    y$dh <- y$Sum.D5/y$Sum.D4
+    y$Kh <- ((pi*998.2071)/(128*10^-3))*y$Sum.D4meter
+    y <- data.frame("indv"= y$indv , "treatment"= y$treatment ,"vessel_frequency"= y$vessel_frequency, "vul_index"= y$vul_index, "dh"= y$dh, "kh" = y$Kh )
+    y <- y[1,]
+    return(y)
+  })
+  
+  df <- do.call(rbind, Map(data.frame, df))
+  return(df)
+}) ##se calcula el EW vessel freq y el indice de vulnerabilidad
+
+
+
+EW_20.21_vul_index <- rbind(EW_20.21_vul_index$EW_2020_feret, EW_20.21_vul_index$EW_2021_feret)
+
+EW_20.21_vul_index$vul_indexNA <- ifelse(EW_20.21_vul_index$vul_index > 0.3, NA, EW_20.21_vul_index$vul_index)
+shapiro.test(EW_20.21_vul_index$vul_indexNA)
+qqnorm(EW_20.21_vul_index$vul_indexNA)
+qqline(EW_20.21_vul_index$vul_indexNA) ##es muy parecida a la normal
+
+shapiro.test(EW_20.21_vul_index$vessel_frequency) ##es normal
+shapiro.test(EW_20.21_vul_index$dh) ##es normal
+
+ggplot()+ geom_boxplot(data= EW_20.21_vul_index, aes(x=as.factor(treatment), y= vul_indexNA))
+ggplot()+ geom_boxplot(data= EW_20.21_vul_index, aes(x=as.factor(treatment), y= vessel_frequency))
+ggplot()+ geom_boxplot(data= EW_20.21_vul_index, aes(x=as.factor(treatment), y= dh))
+ggplot()+ geom_boxplot(data= EW_20.21_vul_index, aes(x=as.factor(treatment), y= kh))
+
+
+
+anova_vulindex <- aov(data= EW_20.21_vul_index, vul_indexNA ~ treatment )
+summary(anova_vulindex)
+anova_vessfrq <- aov(data= EW_20.21_vul_index, vessel_frequency ~ treatment )
+anova_dh <- aov(data= EW_20.21_vul_index, dh ~ treatment )
+
+aggregate(vul_indexNA ~ treatment, EW_20.21_vul_index, mean )
+aggregate(vul_indexNA ~ treatment, EW_20.21_vul_index, se )
+
+aggregate(vessel_frequency ~ treatment, EW_20.21_vul_index, mean )
+aggregate(vessel_frequency ~ treatment, EW_20.21_vul_index, se )
+
+aggregate(dh ~ treatment, EW_20.21_vul_index, mean )
+aggregate(dh ~ treatment, EW_20.21_vul_index, se )
+
+summary(anova_vulindex)
+summary(anova_vessfrq)
+
+###LW vulnerability index
+LW_2020 <- split(LW_2020, LW_2020$indv)
+LW_2021 <- split(LW_2021, LW_2021$indv)
+
+LW_2020_feret <-lapply(LW_2020, function(x){  Feret_converter(x, "mm")}) ##primero convierto cada vaso en las variables relacionadas con Feret
+LW_2021_feret <-lapply(LW_2021, function(x){  Feret_converter(x, "mm")})
+
+
+LW_20.21_feret <- list("LW_2020_feret" =LW_2020_feret,"LW_2021_feret" = LW_2021_feret) ##junto los datos
+
+
+LW_20.21_feret <- lapply(LW_20.21_feret, function(x){
+  z <- 0
+while(z < length(x)){
+  z <- z +1
+  x[[z]]$indv <- names(x[z])
+} ###hace que nos cree la columna de individuos
+
+df <- bind_rows(x) ###concentro todos los datos en un data frame
+
+df[c("1", "2")] <-  str_split_fixed(df$indv, ".20" , 2)
+df[c("1", "indv")] <- str_split_fixed(df$"1", ".21" , 2)
+df[c("1", "indv")] <- str_split_fixed(df$"1", "Qc" , 2)
+df <- df[ ,!names(df) %in% c("1", "2")]
+df$treatment <- ifelse(grepl( "18", df$indv) | grepl( "19", df$indv) |  grepl( "26", df$indv) |  grepl( "30", df$indv) | grepl( "47", df$indv) | grepl( "52", df$indv), "drought", "control" )
+return(df)
+}) ##hago la modificacion en la fila de indv para que tenga el identificador del individuo
+
+
+LW_20.21_feret$LW_2020_feret <-  merge(LW_20.21_feret$LW_2020_feret, Data_20.21$Data_2020, by= c("indv", "indv")) ##se unen los datos de ambos data frames
+LW_20.21_feret$LW_2021_feret <-  merge(LW_20.21_feret$LW_2021_feret, Data_20.21$Data_2021, by= c("indv", "indv"))
+
+LW_20.21_vul_index <- lapply(LW_20.21_feret, function(x){
+  listas_xindv <-  split(x, x$indv)
+  
+  df <- lapply(listas_xindv, function(y){
+    y$n_vessel <- nrow(y)
+    y$vessel_frequency <- y$n/y$year_Total_area
+    y$vul_index <- y$Dmean/y$vessel_frequency
+    y$dh <- y$Sum.D5/y$Sum.D4
+    y$Kh <- ((pi*998.2071)/(128*10^-3))*y$Sum.D4meter
+    y <- data.frame("indv"= y$indv , "treatment"= y$treatment ,"vessel_frequency"= y$vessel_frequency, "vul_index"= y$vul_index, "dh" = y$dh, "kh" = y$Kh  )
+    y <- y[1,]
+    return(y)
+  })
+  
+  df <- do.call(rbind, Map(data.frame, df))
+  return(df)
+}) ##se calcula el LW vessel freq y el indice de vulnerabilidad
+
+LW_20.21_vul_index <- do.call(rbind, Map(data.frame, LW_20.21_vul_index))
+LW_20.21_vul_index$dh[LW_20.21_vul_index$dh >= 20] <- 0.07
+
+LW_20.21_vul_index$trans_vul <- ifelse(LW_20.21_vul_index$vul_index > 0.1, NA, LW_20.21_vul_index$vul_index)
+shapiro.test(LW_20.21_vul_index$vul_index)
+qqnorm(LW_20.21_vul_index$vul_index)
+qqline(LW_20.21_vul_index$vul_index) ##es muy parecida a la normal
+
+shapiro.test(LW_20.21_vul_index$vessel_frequency) ##es normal
+qqnorm(LW_20.21_vul_index$vessel_frequency)
+qqline(LW_20.21_vul_index$vessel_frequency) ##no es normal
+
+skewness(LW_20.21_vul_index$vessel_frequency, na.rm = TRUE) #veo que dispersion tiene los datos
+LW_20.21_vul_index$trans_vesfreq <- log10(LW_20.21_vul_index$vessel_frequency +1) ##realizo la transformacion
+qqnorm(LW_20.21_vul_index$trans_vesfreq)
+qqline(LW_20.21_vul_index$trans_vesfreq)
+shapiro.test(LW_20.21_vul_index$trans_vesfreq) ###veo que mis datos ya son normales
+
+shapiro.test(LW_20.21_vul_index$dh) ##es normal
+
+LW_20.21_vul_index$dh <- ifelse(LW_20.21_vul_index$dh >40, NA, LW_20.21_vul_index$dh )
+
+ggplot()+ geom_boxplot(data= LW_20.21_vul_index, aes(x=as.factor(treatment), y= dh))
+ggplot()+ geom_boxplot(data= LW_20.21_vul_index, aes(x=as.factor(treatment), y= trans_vul))
+ggplot()+ geom_boxplot(data= LW_20.21_vul_index, aes(x=as.factor(treatment), y= trans_vesfreq))
+
+aggregate(trans_vesfreq ~ treatment, LW_20.21_vul_index, mean )
+aggregate(trans_vesfreq ~ treatment, LW_20.21_vul_index, se )
+
+aggregate(dh ~ treatment, LW_20.21_vul_index, mean )
+aggregate(dh ~ treatment, LW_20.21_vul_index, se )
+
+aggregate(trans_vul ~ treatment, LW_20.21_vul_index, mean )
+aggregate(trans_vul ~ treatment, LW_20.21_vul_index, se )
+
+anov_LW_20.21_vul_index <- aov(trans_vul ~ treatment, data = LW_20.21_vul_index)
+summary(anov_LW_20.21_vul_index)
+
+anov_LW_20.21_vul_index <- aov(trans_vesfreq ~ treatment, data = LW_20.21_vul_index)
+summary(anov_LW_20.21_vul_index)
+
+anov_LW_20.21_dh <- aov(dh ~ treatment, data = LW_20.21_vul_index)
+summary(anov_LW_20.21_dh)
+
+##total area
+area_2020 <-  lapply(Qca2020, function(x) { x$area_total <-  sum(x$Area)
+return(x)}) 
+x <- 0
+while (x < length(area_2020)) {
+  x <- x+1
+  nombre <- names(area_2020[x])
+  area_2020[[x]]$indv <- nombre
+  if((names(area_2020[x]) == "g18QcS4F21.csv") | (names(area_2020[x]) == "h19QcS4F21.csv") | (names(area_2020[x]) == "i26QcS4F21.csv") | (names(area_2020[x]) == "m47QcS4F21.csv") | (names(area_2020[x]) == "n52QcS4F21.csv")){area_2020[[x]]$treatment <- "drought" }else{
+    area_2020[[x]]$treatment <- "control"}
+}
+rm(x)
+area_2020 <-  lapply(area_2020, function(x){x <- data.frame("Area"= x$area_total, "indv"= x$indv , "treatment" = x$treatment)
+return(x)}) 
+
+area_2020 <- do.call(rbind, Map(data.frame, area_2020))
+area_2020 <-   area_2020[!duplicated(area_2020$Area), ]
+area_2020$Area <- ifelse(area_2020$indv == "e9QcC4F21.csv",NA, area_2020$Area)
+
+Area_2021 <- lapply(Qca2021, function(x) { 
+  x$Area <- as.numeric(x$Area)
+  x$area_total <-  sum(x$Area)
+return(x)}) 
+x <- 0
+while (x < length(Area_2021)) {
+  x <- x+1
+  nombre <- names(Area_2021[x])
+  Area_2021[[x]]$indv <- nombre
+  if((names(Area_2021[x]) == "h18QcS19E22.csv") | (names(Area_2021[x]) == "i19QcS19E22.csv") | (names(Area_2021[x]) == "j30QcS19E22.csv") | (names(Area_2021[x]) == "o47QcS19E22.csv") | (names(Area_2021[x]) == "r52QcS19E22.csv")){Area_2021[[x]]$treatment <- "drought" }else{
+    Area_2021[[x]]$treatment <- "control"}
+}
+rm(x)
+Area_2021 <-  lapply(Area_2021, function(x){x <- data.frame("Area"= x$area_total, "indv"= x$indv , "treatment" = x$treatment)
+return(x)}) 
+
+Area_2021 <- do.call(rbind, Map(data.frame, Area_2021))
+Area_2021 <-   Area_2021[!duplicated(Area_2021$Area), ]
+
+
+Area_2021.20 <- rbind(Area_2021, area_2020)
+ggplot()+ geom_boxplot(data = Area_2021.20, aes(x=treatment, y=Area))
+
+summary(aov(Area ~ treatment, data = Area_2021.20))
+
+aggregate(Area ~ treatment, Area_2021.20, mean )
+aggregate(Area ~ treatment, Area_2021.20, se )
+
+```
+
+```{r Relacion_crecimiento clima todo el periodo de crecimiento con TRW bruto, include=FALSE}
+source("C:/Minicores/R_analisis/Analisis_anatomia/Anatomy_function.R") ##en windows
+setwd("C:/Minicores/R_analisis")
+###primero cremeamos hacemos una tabla con el crecimiento diario del arbol
+Data2021_Bruto <- read_excel_allsheets("Datos_Modificados_Qca.xlsx")
+Data2021_Bruto <- Data2021_Bruto[!names(Data2021_Bruto) %in% c("ray_area","10AGOS_FENO", "2Feb21")] ##elimino los elementos que no necesito
+dates <- as.Date(c( "2021/03/18", "2021/04/01", "2021/04/15", "2021/04/21", "2021/06/10", "2021/07/22","2021/08/26", "2021/09/09", "2021/10/14", "2021/11/18", "2021/12/16","2022/01/19", "2022/02/8" )) ##creo un vector con las fecha
+x <- 0
+while(x < length(Data2021_Bruto)){ ##pongo una columna de fechas en cada elemento de la lista
+  x <- x+1
+  Data2021_Bruto[[x]]$date <- dates[x]
+}
+rm(x)
+
+ Data2021_Bruto <- lapply(Data2021_Bruto, function(x){
+  df <- x[!(is.na(x$Area) |x$Area == " ") ,  ] 
+  df <- df[ ,names(df) %in% c("indv" ,"Plot","Tratam", "TRW (mm) arriba", "TRW (mm) centro", "TRW (mm) Abajo","date" ), drop = F]
+  df$TRW_mean <- rowMeans(df[ ,names(df) %in% c("TRW (mm) arriba", "TRW (mm) centro", "TRW (mm) Abajo")], na.rm = T)
+return(df)
+}) ###me creo el TRW medio individual en cada fecha
+
+###calculo el Z-score para estandarizar
+ # z_score <- lapply(Data2021_Bruto, function(x){
+ #   x <- x[complete.cases(x), ]
+ #   x$TRW_mean <- as.numeric(x$TRW_mean)
+ #   x$z_score <- (x$TRW_mean - mean(mean(x$TRW_mean, na.rm=T)))/ nrow(x)
+ #   return(x)
+ # })
+   
+# Data2021 <- lapply(z_score, function(x){
+#   df1 <- aggregate(z_score~ Tratam, x , mean )
+#   df2 <- aggregate(z_score~ Tratam,x, se )
+#   df <- cbind(df1, df2)
+#   names(df)[4] <- "TRW_se"
+#   df[3] <- NULL
+#   df$date <- x$date[1]
+#   return(df)
+# }) ###me creo un TRW medio de toda la fecha dependiendo del tratamiento
+ 
+ 
+ ####hago el TRW estandarizado con log +1
+ 
+#  Data2021_modelo <- do.call(rbind, Map(data.frame, Data2021_Bruto))
+#  Data2021_modelo <- Data2021_modelo[complete.cases(Data2021_modelo), ]
+#  Data2021_modelo$TRWlog <- log10(Data2021_modelo$TRW_mean +1)
+#  ####no sale normal por los 0
+#  Data2021_modelo <- merge(x= DBH_H, y=Data2021_modelo, all.y = T, by= c("indv", "indv"))
+#  Data2021_modelogam <- gamm4(data = Data2021_modelo, TRWlog ~  s(as.numeric(date)) + Tratam + s(DBH_.cm.), random = ~(1| Plot))
+#  shapiro.test(Data2021_modelogam$gam$residuals)
+#  
+#  pred_gamm4 <- get_predictions(Data2021_modelogam$gam, 
+#                        cond = list(date = as.numeric(rep(unique(Data2021_modelo$date), 2)),
+#                                    DBH_.cm. = mean(Data2021_modelo$DBH_.cm.),
+#                                   Tratam = c("Control", "Sequía"),
+#                                   se=T))
+# 
+# pred_gamm4$date <- as.Date(pred_gamm4$date)
+ 
+ # ggplot()+
+ #   geom_line(data = pred_gamm4, aes(x= date, fit, color= Tratam))+
+ #   geom_point(data = Data2021_modelo, aes(x= date,TRWlog, color= Tratam))
+
+  Data2021 <- lapply(Data2021_Bruto, function(x){
+  df1 <- aggregate(TRW_mean~ Tratam, x , mean )
+  df2 <- aggregate(TRW_mean~ Tratam,x, se )
+  df <- cbind(df1, df2)
+  names(df)[4] <- "TRW_se"
+  df[3] <- NULL
+  df$date <- x$date[1]
+  return(df)
+}) ###me creo un TRW medio de toda la fecha dependiendo del tratamiento
+
+Data2021 <- do.call("rbind", Data2021) ####esto estaba en el codigo antiguo
+
+
+
+###creo un crecimiento diario del arbol
+# pred_gamm4$TRW_mean <- pred_gamm4$fit
+# pred_gamm4 <- pred_gamm4[order(pred_gamm4$date),]
+# Data2021 <- split(pred_gamm4, pred_gamm4$Tratam)
+
+Data2021 <- split(Data2021, Data2021$Tratam)
+
+
+
+Data2021 <- lapply(Data2021, function(x){ 
+  z <- 0
+  while(z < length(x$date)){
+    z <- z+1
+    ifelse(z == 1,x$difdate[[1]] <- 0.1, x$difdate[[z]] <- difftime(x$date[[z]], x$date[[z-1]], units = "days"))
+  }
+  x[is.na(x)] <- 0
+  x$TRW_diff <- c(NA, diff(x$TRW_mean))
+  x$TRW_diff[is.na(x$TRW_diff) | x$TRW_diff < 0 ] <- 0
+  x$difdate <- as.numeric(x$difdate)
+  x$TRW_daylyincrement <- x$TRW_diff/x$difdate
+  return(x)
+  }) ##esta funcion hace el incremento diario entre fechas
+
+
+df_TRW_clima <- lapply(Data2021, function(x){
+  difdate <- x$difdate ###me creo un vector para la diferencia entre fechas
+  z <- 0
+  df <- c()
+  while(z < length(difdate)){ ##creo un vector con las repeticiones de la diferencia de fechas y en su contenido tiene el valor de TRW diario
+    z <- z+1
+    repeticiones <- rep(x$TRW_daylyincrement[z], times = difdate[z]) 
+    df <- c(df, repeticiones)
+  }
+  df_TRW_clima <- data.frame("date" = seq.Date(from = as.Date("2021-03-19"), to= as.Date("2022-02-08"), by= "day"), "TRW_dayly" = df) ###se crea el data frame con las fechas de muestreo y a su vez el acumulado de crecimiento durante el estudio
+  df_TRW_clima$TRW_dayly[1] <- df_TRW_clima$TRW_dayly[1] + x$TRW_mean[1] 
+  df_TRW_clima$TRW_acum <- cumsum(df_TRW_clima$TRW_dayly)
+  
+    return(df_TRW_clima)
+}) ##esta funcion me crea un nuevo data frame donde calculo el acumulado de TRW dia a dia
+
+df_TRW_clima <- lapply(df_TRW_clima, function(x){
+  Gamir_Nov21_clima_Feb22 <- Gamir_Nov21_Feb22_Temp[,!names(Gamir_Nov21_Feb22_Temp) %in% c("PET")]
+  spei_data <- spei_data[,!names(spei_data) %in% c("sing")]
+  names(spei_data)[1] <- "date" 
+  
+  result <- merge(x, Gamir_Nov21_clima_Feb22 , by= c("date", "date"))
+  result <- merge(result, spei_data , by= c("date", "date"))
+  result <- merge(result, HOBO_gamir , by= c("date", "date"))
+  
+  return(result)
+}) ###uno ya el TRW acumualdo, con las variables climaticas
+
+
+###creo las fechas anteriores de este incremento para hacer el los 30 dias antes del inicio de crecimiento
+fecha_anterior <-  data.frame("date"= seq.Date(from = as.Date("2021-01-19"), to= as.Date("2021-03-18"), by= "day"))
+Gamir_Nov21_Feb22_clima <- Gamir_Nov21_Feb22_Temp[,!names(Gamir_Nov21_Feb22_Temp) %in% c("PET")]
+  spei_data <- spei_data[,!names(spei_data) %in% c("sing")]
+  names(spei_data)[1] <- "date" 
+fecha_anterior <- merge(fecha_anterior, Gamir_Nov21_Feb22_clima , by= c("date", "date"))
+fecha_anterior <- merge(fecha_anterior, spei_data , by= c("date", "date"))
+fecha_anterior <- merge(fecha_anterior, HOBO_gamir , by= c("date", "date"), all.x = TRUE)
+
+fecha_anterior$TRW_dayly <- 0
+fecha_anterior$TRW_acum <- 0
+
+df_TRW_clima <- lapply(df_TRW_clima, function(x){
+  df <- rbind(fecha_anterior, x)
+  return(df)}) ###le añado el clima anterior
+
+
+df_lag5 <- lapply(df_TRW_clima, function(x){
+  TRW_acum <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_acum"] ##con esto hago el acumulado desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+  TRW_dayly <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_dayly"]
+  date <-  x[seq(from= 60, to =nrow(x) , by = 1), "date"]##con esto hago el cojo las fechas extradias desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+   fechas <- c("date" = seq.Date(from = as.Date("2021-03-15"), to= as.Date("2022-02-08"), by= "day"))
+   fechas <- x[x$date %in% fechas ,]
+   prp <- fechas$prp
+   temp_min <- fechas$Tmin
+   temp_max <- fechas$Tmax
+   spei <- fechas$spei
+   VPD <- fechas$VPD
+
+   prp_lag5 <- sum_every_n(prp,5)
+   Tmin_lag5 <- mean_every_n(temp_min,5)
+   Tmax_lag5 <- mean_every_n(temp_max,5)
+   spei_lag5 <- mean_every_n(spei,5)
+   VPD_lag5 <- mean_every_n(VPD,5)
+
+  resultado <- data.frame("date" =date  ,"TRW_acum" =TRW_acum, "TRW_dayly" =TRW_dayly, "prp_Acum" = prp_lag5, "Tmin_mean" = Tmin_lag5,
+                          "Tmax_mean"=Tmax_lag5, "spei_mean"=spei_lag5, "VPD"=VPD_lag5 )
+  return(resultado)
+}) ##funcion nueva, creo que es la mas indicada
+
+df_lag10 <- lapply(df_TRW_clima, function(x){
+  TRW_acum <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_acum"] ##con esto hago el acumulado desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+  date <-  x[seq(from= 60, to =nrow(x) , by = 1), "date"]##con esto hago el cojo las fechas extradias desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+  TRW_dayly <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_dayly"]
+   fechas <- c("date" = seq.Date(from = as.Date("2021-03-10"), to= as.Date("2022-02-08"), by= "day"))
+   fechas <- x[x$date %in% fechas ,]
+   prp <- fechas$prp
+   temp_min <- fechas$Tmin
+   temp_max <- fechas$Tmax
+   spei <- fechas$spei
+   VPD <- fechas$VPD
+
+   prp_lag10 <- sum_every_n(prp,10)
+   Tmin_lag10 <- mean_every_n(temp_min,10)
+   Tmax_lag10 <- mean_every_n(temp_max,10)
+   spei_lag10 <- mean_every_n(spei,10)
+   VPD_lag10 <- mean_every_n(VPD,10)
+
+  resultado <- data.frame("date" =date  ,"TRW_acum" =TRW_acum,"TRW_dayly" =TRW_dayly, "prp_Acum" = prp_lag10, "Tmin_mean" = Tmin_lag10,
+                          "Tmax_mean"=Tmax_lag10, "spei_mean"=spei_lag10, "VPD"=VPD_lag10 )
+  return(resultado)
+}) ##funcion nueva, creo que es la mas indicada
+
+df_lag15 <- lapply(df_TRW_clima, function(x){
+  TRW_acum <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_acum"] ##con esto hago el acumulado desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+  TRW_dayly <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_dayly"]
+  date <-  x[seq(from= 60, to =nrow(x) , by = 1), "date"]##con esto hago el cojo las fechas extradias desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+   fechas <- c("date" = seq.Date(from = as.Date("2021-03-05"), to= as.Date("2022-02-08"), by= "day"))
+   fechas <- x[x$date %in% fechas ,]
+   prp <- fechas$prp
+   temp_min <- fechas$Tmin
+   temp_max <- fechas$Tmax
+   spei <- fechas$spei
+   VPD <- fechas$VPD
+
+   prp_lag15 <- sum_every_n(prp,15)
+   Tmin_lag15 <- mean_every_n(temp_min,15)
+   Tmax_lag15 <- mean_every_n(temp_max,15)
+   spei_lag15 <- mean_every_n(spei,15)
+   VPD_lag15 <- mean_every_n(VPD,15)
+
+  resultado <- data.frame("date" =date  ,"TRW_acum" =TRW_acum, "TRW_dayly" =TRW_dayly, "prp_Acum" = prp_lag15, "Tmin_mean" = Tmin_lag15,
+                          "Tmax_mean"=Tmax_lag15, "spei_mean"=spei_lag15, "VPD"=VPD_lag15 )
+  return(resultado)
+}) ##funcion nueva, creo que es la mas indicada
+
+df_lag30 <- lapply(df_TRW_clima, function(x){
+  TRW_acum <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_acum"] ##con esto hago el acumulado desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+  TRW_dayly <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_dayly"]
+  date <-  x[seq(from= 60, to =nrow(x) , by = 1), "date"]##con esto hago el cojo las fechas extradias desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+   fechas <- c("date" = seq.Date(from = as.Date("2021-02-18"), to= as.Date("2022-02-08"), by= "day"))
+   fechas <- x[x$date %in% fechas ,]
+   prp <- fechas$prp
+   temp_min <- fechas$Tmin
+   temp_max <- fechas$Tmax
+   spei <- fechas$spei
+   VPD <- fechas$VPD
+   
+   prp_lag30 <- sum_every_n(prp,30)
+   Tmin_lag30 <- mean_every_n(temp_min,30)
+   Tmax_lag30 <- mean_every_n(temp_max,30)
+   spei_lag30 <- mean_every_n(spei,30)
+   VPD_lag30 <- mean_every_n(VPD,30)
+   
+  resultado <- data.frame("date" =date  ,"TRW_acum" =TRW_acum, "TRW_dayly" = TRW_dayly , "prp_Acum" = prp_lag30, "Tmin_mean" = Tmin_lag30,
+                          "Tmax_mean"=Tmax_lag30, "spei_mean"=spei_lag30, "VPD"=VPD_lag30 )
+  return(resultado)
+}) ##funcion nueva, creo que es la mas indicada
+
+####voy a mirar si son normales las variables para ello hago el test de shapiro para todas las variables
+clima <- df_TRW_clima$Control
+shapiro.test(clima$Tmin) ###no tienen una distribucion normal
+shapiro.test(clima$Tmax) ###no tienen una distribucion normal
+shapiro.test(clima$prp) ###no tienen una distribucion normal
+shapiro.test(clima$spei) ###no tienen una distribucion normal
+
+###por lo tanto tengo que usar r de Spearman para calcular su correlacion
+
+lista_lag <- list("lag5" =df_lag5, "lag10"= df_lag10, "lag15"= df_lag15,"lag30"= df_lag30)
+
+
+
+
+resultados_correlacion_clima <- lapply(lista_lag, function(x){
+  lapply(x, function(y){
+   result_prp <- cor.test(y$TRW_dayly, y$prp_Acum , method = 'spearman', exact= FALSE)
+   result_Tmin <- cor.test(y$TRW_dayly, y$Tmin_mean , method = 'spearman', exact= FALSE )
+   result_Tmax <- cor.test(y$TRW_dayly, y$Tmax_mean , method = 'spearman', exact= FALSE )
+   result_spei <- cor.test(y$TRW_dayly, y$spei_mean , method = 'spearman', exact= FALSE )
+   result_VPD <- cor.test(y$TRW_dayly, y$VPD , method = 'spearman', exact= FALSE )
+   print(result_prp)
+   print(result_Tmin)
+   print( result_Tmax)
+   print(result_spei)
+   print(result_VPD)
+   resultado <- data.frame("prp" =result_prp$estimate, "Tmin" =result_Tmin$estimate, "Tmax"= result_Tmax$estimate, "spei" = result_spei$estimate, "VPD" = result_VPD$estimate)
+   return(resultado)
+   
+   })}) ##spearman exact False ya que hay muchos empates
+
+resultados_correlacion_clima <- lapply(resultados_correlacion_clima, function(x){
+  resultado <- do.call(rbind,Map(data.frame, x) )
+  resultado <- setDT(resultado, keep.rownames = "treatment")[]
+ return(resultado)
+})
+
+nombres <- names(resultados_correlacion_clima)
+x <- 0
+while (x <length(resultados_correlacion_clima)) {
+  x <- x+1
+  resultados_correlacion_clima[[x]]$lag <- nombres[x]
+}
+
+resultados_correlacion_clima <- do.call(rbind,Map(data.frame, resultados_correlacion_clima) )
+resultados_correlacion_clima$trat_lag <- as.factor(paste(resultados_correlacion_clima$treatment, resultados_correlacion_clima$lag, sep = "_"))
+
+
+resultados_correlacion_clima$trat_lag <- fct_relevel(resultados_correlacion_clima$trat_lag,  "Control_lag5", "Control_lag10",  "Control_lag15",  "Control_lag30","Sequía_lag5", "Sequía_lag10","Sequía_lag15",  "Sequía_lag30" )
+
+resultados_correlacion_clima$lag <- fct_relevel(resultados_correlacion_clima$lag,  "lag5","lag10", "lag15", "lag30" )
+
+
+resultados_correlacion_clima_plot <- pivot_longer(resultados_correlacion_clima, cols=c("prp", "Tmin", "Tmax", "spei", "VPD"),
+                    names_to='variable',
+                    values_to='values')
+resultados_correlacion_clima_plot$trat_lag <- as.factor(paste(resultados_correlacion_clima_plot$variable, resultados_correlacion_clima_plot$trat_lag, sep = "_"))
+
+resultados_correlacion_clima_plot$trat_lag <- fct_relevel(resultados_correlacion_clima_plot$trat_lag,  "prp_Control_lag5","prp_Control_lag10", "prp_Control_lag15", "prp_Control_lag30", "prp_Sequía_lag5","prp_Sequía_lag10", "prp_Sequía_lag15", "prp_Sequía_lag30", "Tmin_Control_lag5","Tmin_Control_lag10", "Tmin_Control_lag15", "Tmin_Control_lag30", "Tmin_Sequía_lag5","Tmin_Sequía_lag10", "Tmin_Sequía_lag15", "Tmin_Sequía_lag30", "Tmax_Control_lag5", "Tmax_Control_lag10", "Tmax_Control_lag15", "Tmax_Control_lag30", "Tmax_Sequía_lag5", "Tmax_Sequía_lag10", "Tmax_Sequía_lag15", "Tmax_Sequía_lag30", "spei_Control_lag5", "spei_Control_lag10", "spei_Control_lag15", "spei_Control_lag30", "spei_Sequía_lag5", "spei_Sequía_lag10", "spei_Sequía_lag15", "spei_Sequía_lag30","VPD_Control_lag5","VPD_Control_lag10","VPD_Control_lag15","VPD_Control_lag30", "VPD_Sequía_lag5","VPD_Sequía_lag10","VPD_Sequía_lag15","VPD_Sequía_lag30", )
+
+ggplot(resultados_correlacion_clima_plot, aes(x=as.factor(trat_lag), y= values))+
+  geom_bar(aes(fill=lag), stat="identity")+
+  scale_y_continuous(breaks = c(-0.5,-0.25,0,0.25,0.5), expand = c(-0.5,0.5))+
+  scale_fill_manual(values=c("#008B45","#00FF7F","#5CACEE","slateblue3"))+
+  geom_hline(yintercept = c(-0.16,0.16), color="black", linetype= 2 )+
+  geom_hline(yintercept = 0, color="black", linetype= 1 )+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text = element_text(color = "black",size = 12),
+        axis.ticks.length  = unit(0.25, "cm"))+
+  scale_x_discrete(labels = c(" "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," "  ))
+
+df_TRW_clima_xplot <- do.call(rbind, Map(data.frame, df_TRW_clima))
+df_TRW_clima_xplot <- setDT(df_TRW_clima_xplot, keep.rownames = "treatment")
+df_TRW_clima_xplot$treatment <- ifelse(grepl( "Sequía", df_TRW_clima_xplot$treatment), "drought", "control" )
+
+
+ggplot(df_TRW_clima_xplot, aes(x=date, y= TRW_dayly))+ geom_line(lwd=1)+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"))+
+  facet_grid(. ~ treatment)+
+  scale_x_date(date_breaks = "1 month" ,date_labels = "%m")
+  
+
+```
+
+```{r Relacion_crecimiento clima por estaciones, include=FALSE}
+##empiezo poniendole una nueva columna de estaciones
+lista_lag <- lapply(lista_lag, function(x){
+  nombres <- names(x)
+  z <- 0
+  while (z <length(x)) {
+  z <- z+1
+  x[[z]]$treatment <- nombres[z]
+}
+  resultado <- do.call(rbind,Map(data.frame, x) )
+ return(resultado)
+})
+
+nombres <- names(lista_lag)
+x <- 0
+while (x <length(lista_lag)) {
+  x <- x+1
+  lista_lag[[x]]$lag <- nombres[x]
+}
+rm(x)
+lista_lag <- do.call(rbind,Map(data.frame, lista_lag) )
+
+seasons <- c("01" = "Winter", "02" = "Winter","03" = "Spring", "04" = "Spring", "05" = "Spring","06" = "Summer", "07" = "Summer", "08" = "Summer","09" = "Fall", "10" = "Fall", "11" = "Fall","12" = "Winter")
+seasons <-seasons[format(lista_lag$date, "%m")]
+lista_lag$season <- seasons
+
+###separo el data frame dependiendo de la estacion
+seasons <- split(lista_lag, lista_lag$season)
+
+
+###empiezo a hacer el analisis con las estaciones
+
+season_climate <- lapply(seasons, function(x){
+  season <- split(x, x$lag)
+  season <- lapply(season, function(z){split(z, z$treatment)  } )
+  season_correlacion_clima <- lapply(season, function(x){
+  lapply(x, function(y){
+   result_prp <- cor.test(y$TRW_dayly, y$prp_Acum , method = 'spearman', exact= FALSE )
+   result_Tmin <- cor.test(y$TRW_dayly, y$Tmin_mean , method = 'spearman', exact= FALSE )
+   result_Tmax <- cor.test(y$TRW_dayly, y$Tmax_mean , method = 'spearman', exact= FALSE )
+   result_spei <- cor.test(y$TRW_dayly, y$spei_mean , method = 'spearman', exact= FALSE )
+   result_VPD <- cor.test(y$TRW_dayly, y$VPD , method = 'spearman', exact= FALSE )
+   print(result_prp)
+   print(result_Tmin)
+   print( result_Tmax)
+   print(result_spei)
+   print(result_VPD)
+   
+   resultado <- data.frame("prp" =result_prp$estimate, "Tmin" =result_Tmin$estimate, "Tmax"= result_Tmax$estimate, "spei" = result_spei$estimate, "VPD" = result_VPD$estimate)
+   return(resultado)
+   
+   })}) ##kendall ?¿
+
+season_correlacion_clima <- lapply(season_correlacion_clima, function(x){
+  resultado <- do.call(rbind,Map(data.frame, x) )
+  resultado <- setDT(resultado, keep.rownames = "treatment")[]
+ return(resultado)
+})
+
+nombres <- names(season_correlacion_clima)
+x <- 0
+while (x <length(season_correlacion_clima)) {
+  x <- x+1
+  season_correlacion_clima[[x]]$lag <- nombres[x]
+}
+
+season_correlacion_clima <- do.call(rbind,Map(data.frame, season_correlacion_clima) )
+return(season_correlacion_clima)
+
+}) ##aqui uno todo el codigo mediante listas
+
+season_climate_plots <- lapply(season_climate, function(x){
+  x$trat_lag <- as.factor(paste(x$treatment, x$lag, sep = "_"))
+
+x$lag <- fct_relevel(x$lag,  "lag5","lag10", "lag15", "lag30" )
+
+
+season_climate_plots <- pivot_longer(x, cols=c("prp", "Tmin", "Tmax", "spei", "VPD"),
+                    names_to='variable',
+                    values_to='values')
+season_climate_plots$trat_lag <- as.factor(paste(season_climate_plots$variable, season_climate_plots$trat_lag, sep = "_"))
+
+season_climate_plots$trat_lag <- fct_relevel(season_climate_plots$trat_lag,  "prp_Control_lag5","prp_Control_lag10", "prp_Control_lag15", "prp_Control_lag30", "prp_Sequía_lag5","prp_Sequía_lag10", "prp_Sequía_lag15", "prp_Sequía_lag30", "Tmin_Control_lag5","Tmin_Control_lag10", "Tmin_Control_lag15", "Tmin_Control_lag30", "Tmin_Sequía_lag5","Tmin_Sequía_lag10", "Tmin_Sequía_lag15", "Tmin_Sequía_lag30", "Tmax_Control_lag5", "Tmax_Control_lag10", "Tmax_Control_lag15", "Tmax_Control_lag30", "Tmax_Sequía_lag5", "Tmax_Sequía_lag10", "Tmax_Sequía_lag15", "Tmax_Sequía_lag30", "spei_Control_lag5", "spei_Control_lag10", "spei_Control_lag15", "spei_Control_lag30", "spei_Sequía_lag5", "spei_Sequía_lag10", "spei_Sequía_lag15", "spei_Sequía_lag30","VPD_Control_lag5","VPD_Control_lag10","VPD_Control_lag15","VPD_Control_lag30", "VPD_Sequía_lag5","VPD_Sequía_lag10","VPD_Sequía_lag15","VPD_Sequía_lag30", )
+
+ggplot(season_climate_plots, aes(x=as.factor(trat_lag), y= values))+
+  geom_bar(aes(fill=lag), stat="identity")+
+  scale_y_continuous(breaks = c(-1,-0.75,-0.5,-0.25,0,0.25,0.5,0.75,1), limits = c(-1,1.1))+
+  scale_fill_manual(values=c("#008B45","#00FF7F","#5CACEE","slateblue3"))+
+  geom_hline(yintercept = 0, color="black" )+
+  geom_hline(yintercept = c(0.25,-0.25), color="black", linetype=2 )+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text = element_text(color = "black",size = 12),
+        axis.ticks.length  = unit(0.25, "cm"))+
+  scale_x_discrete(labels = c(" "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," "  ))
+  
+}) 
+
+season_climate_plots$Fall
+season_climate_plots$Spring
+season_climate_plots$Summer
+```
+
+```{r Dendrometros, include=FALSE}
+setwd("C:/Minicores/Dendrometros")
+fechas_dendrometros <- c("28/01/21",	"04/02/21",	"18/02/21", "04/03/21"	,"18/03/21",	"01/04/21",	"15/04/21",	"22/04/21",	"29/04/21",	"13/05/21",	"28/05/21",	"10/06/21",	"24/06/21",	"08/07/21",	"22/07/21",	"05/08/21",	"19/08/21",	"26/08/21",	"09/09/21",	"17/09/21",	"23/09/21",	"14/10/21",	"27/10/21",	"18/11/21",	"30/11/21",	"16/12/21",	"20/12/21",	"19/01/22",	"28/01/22",	"24/02/22")
+fechas_dendrometros <- as.Date(fechas_dendrometros, "%d/%m/%y")
+
+Q.canariensis_dendrometro <- read_xlsx("Gamir_dendrometros.xlsx", sheet = "Qca")
+
+Q.canariensis_dendrometro <- split(Q.canariensis_dendrometro, Q.canariensis_dendrometro$treatment)
+
+Q.canariensis_dendrometro <-  lapply(Q.canariensis_dendrometro, function(x){
+  x$indv <- as.factor(x$indv)
+   media <- sapply(x, function(y)if(is.numeric(y)) mean(y, na.rm = TRUE))
+   media <- media[!is.na(media)]
+   media <- data.table(media)
+   media$names <- names(x)
+   media <- as.data.frame(media)
+   
+   media <- pivot_wider(media, names_from = "names", values_from = "media")
+   
+   columnas <- x[,! names(media) %in% c("treatment",  "indv")]
+   columnas <- names(columnas)
+
+     df <- pivot_longer(media, cols= columnas,
+                    names_to='date',
+                    values_to='increment')
+     df$date <- fechas_dendrometros
+     df$indv <- NULL
+     df$treatment <- NULL
+     
+     df$increment <- as.numeric(df$increment)
+     
+     z <- 0
+     while(z < length(df$date)){
+    z <- z+1
+    df$diffdate[z-1] <- difftime(df$date[z], df$date[z-1], units = "days")
+     }
+     
+     df$TRW_daylyincrement <- df$increment/df$diffdate
+
+     return(df)
+  
+}) ####no me funciona bien el comando diffdate y he tenido que hacer un "apaño" haciendo el crecimiento hasta la fecha
+
+Q.canariensis_dendrometro_diario <- lapply(Q.canariensis_dendrometro, function(x) {
+  x$TRW_daylyincrement[is.na(x$TRW_daylyincrement) | x$TRW_daylyincrement < 0 ] <- 0 
+  
+z <- 0
+numero <- c()
+while (z < (length(x$diffdate)-1)) {
+  z <- z +1
+  repeticionz <- rep(x$TRW_daylyincrement[z+1], times= x$diffdate[z])
+  numero <- c(numero,repeticionz)
+}
+df_TRW_clima <- data.frame("date" = seq.Date(from = as.Date("2021-01-29"), to= as.Date("2022-02-24"), by= "day"), "TRW_dayly" = numero)
+  
+  return(df_TRW_clima)}) ####ahora calculo el incremento diario medido por dendrometros
+
+Q.canariensis_dendrometro_clima <- lapply(Q.canariensis_dendrometro_diario, function(x){
+  Gamir_Nov21_clima_Feb22 <- Gamir_Nov21_Feb22_Temp[,!names(Gamir_Nov21_Feb22_Temp) %in% c("PET")]
+  spei_data <- spei_data[,!names(spei_data) %in% c("sing")]
+  names(spei_data)[1] <- "date" 
+  
+  result <- merge(x, Gamir_Nov21_clima_Feb22 , by= c("date", "date"))
+  result <- merge(result, spei_data , by= c("date", "date"))
+  result <- merge(result, HOBO_gamir , by= c("date", "date"))
+  
+  return(result)
+  
+}) ###le añado el clima
+
+df_lag5_Dendrometro <- lapply(Q.canariensis_dendrometro_clima, function(x){
+  
+  TRW_dayly <-  x[seq(from= 58, to =nrow(x) , by = 1), "TRW_dayly"]
+  
+  date <-  x[seq(from= 58, to =nrow(x) , by = 1), "date"]##con esto hago el cojo las fechas extradias desde el numero de fila 58, que se corresponde con la primera fecha de acumulado
+   fechas <- c("date" = seq.Date(from = as.Date("2021-03-29"), to= as.Date("2022-02-24"), by= "day"))
+   fechas <- x[x$date %in% fechas ,]
+   prp <- fechas$prp
+   temp_min <- fechas$Tmin
+   temp_max <- fechas$Tmax
+   spei <- fechas$spei
+   VPD <- fechas$VPD
+
+   prp_lag5 <- sum_every_n(prp,5)
+   Tmin_lag5 <- mean_every_n(temp_min,5)
+   Tmax_lag5 <- mean_every_n(temp_max,5)
+   spei_lag5 <- mean_every_n(spei,5)
+   VPD_lag5 <- mean_every_n(VPD,5)
+
+  resultado <- data.frame("date" =date  , "TRW_dayly" =TRW_dayly, "prp_Acum" = prp_lag5, "Tmin_mean" = Tmin_lag5,
+                          "Tmax_mean"=Tmax_lag5, "spei_mean"=spei_lag5, "VPD"=VPD_lag5 )
+  return(resultado)
+}) ##funcion nueva, creo que es la mas indicada
+
+df_lag10_Dendrometro <- lapply(Q.canariensis_dendrometro_clima, function(x){
+  TRW_dayly <-  x[seq(from= 58, to =nrow(x) , by = 1), "TRW_dayly"]
+  date <-  x[seq(from= 58, to =nrow(x) , by = 1), "date"]##con esto hago el cojo las fechas extradias desde el numero de fila 58, que se corresponde con la primera fecha de acumulado
+   fechas <- c("date" = seq.Date(from = as.Date("2021-03-24"), to= as.Date("2022-02-24"), by= "day"))
+   fechas <- x[x$date %in% fechas ,]
+   prp <- fechas$prp
+   temp_min <- fechas$Tmin
+   temp_max <- fechas$Tmax
+   spei <- fechas$spei
+   VPD <- fechas$VPD
+
+   prp_lag10 <- sum_every_n(prp,10)
+   Tmin_lag10 <- mean_every_n(temp_min,10)
+   Tmax_lag10 <- mean_every_n(temp_max,10)
+   spei_lag10 <- mean_every_n(spei,10)
+   VPD_lag10 <- mean_every_n(VPD,10)
+
+  resultado <- data.frame("date" =date  , "TRW_dayly" =TRW_dayly, "prp_Acum" = prp_lag10, "Tmin_mean" = Tmin_lag10,
+                          "Tmax_mean"=Tmax_lag10, "spei_mean"=spei_lag10, "VPD"=VPD_lag10 )
+  return(resultado)
+  
+}) ##funcion nueva, creo que es la mas indicada
+
+df_lag15_Dendrometro <- lapply(Q.canariensis_dendrometro_clima, function(x){
+  TRW_dayly <-  x[seq(from= 58, to =nrow(x) , by = 1), "TRW_dayly"]
+  date <-  x[seq(from= 58, to =nrow(x) , by = 1), "date"]##con esto hago el cojo las fechas extradias desde el numero de fila 58, que se corresponde con la primera fecha de acumulado
+   fechas <- c("date" = seq.Date(from = as.Date("2021-03-19"), to= as.Date("2022-02-24"), by= "day"))
+   fechas <- x[x$date %in% fechas ,]
+   prp <- fechas$prp
+   temp_min <- fechas$Tmin
+   temp_max <- fechas$Tmax
+   spei <- fechas$spei
+   VPD <- fechas$VPD
+
+   prp_lag15 <- sum_every_n(prp,15)
+   Tmin_lag15 <- mean_every_n(temp_min,15)
+   Tmax_lag15 <- mean_every_n(temp_max,15)
+   spei_lag15 <- mean_every_n(spei,15)
+   VPD_lag15 <- mean_every_n(VPD,15)
+
+  resultado <- data.frame("date" =date  , "TRW_dayly" =TRW_dayly, "prp_Acum" = prp_lag15, "Tmin_mean" = Tmin_lag15,
+                          "Tmax_mean"=Tmax_lag15, "spei_mean"=spei_lag15, "VPD"=VPD_lag15 )
+  return(resultado)
+}) ##funcion nueva, creo que es la mas indicada
+
+df_lag30_Dendrometro <- lapply(Q.canariensis_dendrometro_clima, function(x){
+  TRW_dayly <-  x[seq(from= 58, to =nrow(x) , by = 1), "TRW_dayly"]
+  date <-  x[seq(from= 58, to =nrow(x) , by = 1), "date"]##con esto hago el cojo las fechas extradias desde el numero de fila 58, que se corresponde con la primera fecha de acumulado
+   fechas <- c("date" = seq.Date(from = as.Date("2021-03-04"), to= as.Date("2022-02-24"), by= "day"))
+   fechas <- x[x$date %in% fechas ,]
+   prp <- fechas$prp
+   temp_min <- fechas$Tmin
+   temp_max <- fechas$Tmax
+   spei <- fechas$spei
+   VPD <- fechas$VPD
+
+   prp_lag30 <- sum_every_n(prp,30)
+   Tmin_lag30 <- mean_every_n(temp_min,30)
+   Tmax_lag30 <- mean_every_n(temp_max,30)
+   spei_lag30 <- mean_every_n(spei,30)
+   VPD_lag30 <- mean_every_n(VPD,30)
+
+  resultado <- data.frame("date" =date  , "TRW_dayly" =TRW_dayly, "prp_Acum" = prp_lag30, "Tmin_mean" = Tmin_lag30,
+                          "Tmax_mean"=Tmax_lag30, "spei_mean"=spei_lag30, "VPD"=VPD_lag30 )
+  return(resultado)
+}) ##funcion nueva, creo que es la mas indicada
+
+lista_lag_dendrometro <- list("lag5" =df_lag5_Dendrometro, "lag10"= df_lag10_Dendrometro, "lag15"= df_lag15_Dendrometro,"lag30"= df_lag30_Dendrometro)
+
+resultados_correlacion_clima_dendrometro <- lapply(lista_lag_dendrometro, function(x){
+  lapply(x, function(y){
+   result_prp <- cor.test(y$TRW_dayly, y$prp_Acum , method = 'kendall' )
+   result_Tmin <- cor.test(y$TRW_dayly, y$Tmin_mean , method = 'kendall' )
+   result_Tmax <- cor.test(y$TRW_dayly, y$Tmax_mean , method = 'kendall' )
+   result_spei <- cor.test(y$TRW_dayly, y$spei_mean , method = 'kendall' )
+   result_VPD <- cor.test(y$TRW_dayly, y$VPD , method = 'kendall' )
+   
+   resultado <- data.frame("prp" =result_prp$estimate, "Tmin" =result_Tmin$estimate, "Tmax"= result_Tmax$estimate, "spei" = result_spei$estimate, "VPD" = result_VPD$estimate)
+   return(resultado)
+   
+   })}) ##kendall ?¿
+
+resultados_correlacion_clima_dendrometro <- lapply(resultados_correlacion_clima_dendrometro, function(x){
+  resultado <- do.call(rbind,Map(data.frame, x) )
+  resultado <- setDT(resultado, keep.rownames = "treatment")[]
+ return(resultado)
+})
+
+nombres <- names(resultados_correlacion_clima_dendrometro)
+x <- 0
+while (x <length(resultados_correlacion_clima_dendrometro)) {
+  x <- x+1
+  resultados_correlacion_clima_dendrometro[[x]]$lag <- nombres[x]
+}
+
+resultados_correlacion_clima_dendrometro <- do.call(rbind,Map(data.frame, resultados_correlacion_clima_dendrometro) )
+resultados_correlacion_clima_dendrometro$trat_lag <- as.factor(paste(resultados_correlacion_clima_dendrometro$treatment, resultados_correlacion_clima_dendrometro$lag, sep = "_"))
+
+
+resultados_correlacion_clima_dendrometro$trat_lag <- fct_relevel(resultados_correlacion_clima_dendrometro$trat_lag,  "Control_lag5", "Control_lag10",  "Control_lag15",  "Control_lag30","Sequía_lag5", "Sequía_lag10","Sequía_lag15",  "Sequía_lag30" )
+
+resultados_correlacion_clima_dendrometro$lag <- fct_relevel(resultados_correlacion_clima_dendrometro$lag,  "lag5","lag10", "lag15", "lag30" )
+
+
+resultados_correlacion_clima_dendrometro <- pivot_longer(resultados_correlacion_clima_dendrometro, cols=c("prp", "Tmin", "Tmax", "spei", "VPD"),
+                    names_to='variable',
+                    values_to='values')
+resultados_correlacion_clima_dendrometro$trat_lag <- as.factor(paste(resultados_correlacion_clima_dendrometro$variable, resultados_correlacion_clima_dendrometro$trat_lag, sep = "_"))
+
+resultados_correlacion_clima_dendrometro$trat_lag <- fct_relevel(resultados_correlacion_clima_dendrometro$trat_lag,  "prp_Control_lag5","prp_Control_lag10", "prp_Control_lag15", "prp_Control_lag30", "prp_Sequía_lag5","prp_Sequía_lag10", "prp_Sequía_lag15", "prp_Sequía_lag30", "Tmin_Control_lag5","Tmin_Control_lag10", "Tmin_Control_lag15", "Tmin_Control_lag30", "Tmin_Sequía_lag5","Tmin_Sequía_lag10", "Tmin_Sequía_lag15", "Tmin_Sequía_lag30", "Tmax_Control_lag5", "Tmax_Control_lag10", "Tmax_Control_lag15", "Tmax_Control_lag30", "Tmax_Sequía_lag5", "Tmax_Sequía_lag10", "Tmax_Sequía_lag15", "Tmax_Sequía_lag30", "spei_Control_lag5", "spei_Control_lag10", "spei_Control_lag15", "spei_Control_lag30", "spei_Sequía_lag5", "spei_Sequía_lag10", "spei_Sequía_lag15", "spei_Sequía_lag30","VPD_Control_lag5","VPD_Control_lag10","VPD_Control_lag15","VPD_Control_lag30", "VPD_Sequía_lag5","VPD_Sequía_lag10","VPD_Sequía_lag15","VPD_Sequía_lag30", )
+
+resultados_correlacion_clima_dendrometro_plot <- ggplot(resultados_correlacion_clima_dendrometro, aes(x=as.factor(trat_lag), y= values))+
+  geom_bar(aes(fill=lag), stat="identity")+
+  scale_y_continuous(breaks = c(-0.5,-0.25,0,0.25,0.5), expand = c(-0.5,0.5))+
+  scale_fill_manual(values=c("#008B45","#00FF7F","#5CACEE","slateblue3"))+
+  geom_hline(yintercept = 0, color="black" )+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text = element_text(color = "black",size = 12),
+        axis.ticks.length  = unit(0.25, "cm"))+
+  scale_x_discrete(labels = c(" "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," "  ))
+resultados_correlacion_clima_dendrometro_plot
+
+df_Dendrometro_dyaly_plot <- do.call(rbind, Map(data.frame, Q.canariensis_dendrometro))
+df_Dendrometro_dyaly_plot <- setDT(df_Dendrometro_dyaly_plot, keep.rownames = "treatment")
+df_Dendrometro_dyaly_plot$treatment <- ifelse(grepl( "Sequía", df_Dendrometro_dyaly_plot$treatment), "drought", "control" )
+ggplot(df_Dendrometro_dyaly_plot, aes(x=date, y= TRW_daylyincrement))+ geom_line(lwd=1)+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text = element_text(color = "black",size = 12),
+        axis.ticks.length  = unit(0.25, "cm"))+
+  facet_grid(. ~ treatment)+
+  scale_x_date(date_breaks = "1 month" ,date_labels = "%m")+
+  geom_hline(yintercept = 0)
+
+```
+
+```{r Diferencias TRW, include=FALSE}
+###cojo los datos de TRW individual de cada fecha con el medio de cada fecha
+
+TRW_2021 <- lapply(Data2021_Bruto, function(x) {x <-  x[!(names(x) %in% c("TRW (mm) Abajo" ,"TRW (mm) centro" , "TRW (mm) arriba"))]
+x <- na.omit(x)
+return(x)}) ##cojo solo el TRW medio individual
+
+
+TRW_2021 <- do.call(rbind, Map(data.frame, TRW_2021)) ####lo uno todo
+
+# cargo los datos de patogenicidad
+patogenos <- read_xlsx("C:/Minicores/Patogenos/Patogenos y textura.xlsx", sheet = "Gamir")
+
+patogenos2020 <- data.frame("indv" = patogenos$Tree, "Pci"= patogenos$media)
+
+TRW_patogeno <- merge(TRW_2021,patogenos2020, by=c("indv","indv"))
+
+names(DBH_H)[names(DBH_H) == "Árbol" ] <- "indv"  ##este data frame lo he cogido de los analisis 2020/2021
+
+DBH_H <- DBH_H[!(names(DBH_H) %in% c("Tratam" ,"Plot" , "Finca","Especie"))]
+
+TRW_patogeno_DBH_H <- merge(TRW_patogeno,DBH_H, by=c("indv","indv")) ###uno los datos del arbol, de patogenos y TRW
+
+####voy a hacer el analisis para la tabla de patogenos
+
+patogenos <- split(patogenos, patogenos$Species)
+patogenos <- patogenos$Quejigo
+
+####usar la distribucion binomial negativa  usando glmmTMB para comparar
+
+
+anv_patogenos <- glmmTMB( Pci2020 ~ Drought,data = patogenos, family = nbinom2())
+summary(anv_patogenos)
+
+ggplot(data = patogenos, aes(x=Drought, y=Pci2020))+ geom_point()
+
+aggregate(Pci2020 ~ Drought, patogenos, mean )
+aggregate(Pci2020 ~ Drought, patogenos, se )
+
+
+
+###ahora hago los analisis de tendencias
+ggplot(data = TRW_patogeno_DBH_H, aes(x=date, y=TRW_mean, color=Tratam))+geom_point()+
+  scale_color_manual(values =c("darkslategray3","#FF4040"))
+
+cor(TRW_patogeno_DBH_H[,5:9], method = "pearson")
+
+TRW_patogeno_DBH_H$indv <- as.factor(TRW_patogeno_DBH_H$indv)
+TRW_patogeno_DBH_H$Plot <- as.factor(TRW_patogeno_DBH_H$Plot)
+TRW_patogeno_DBH_H$date1 <- as.numeric(TRW_patogeno_DBH_H$date) ###lo combierto en numerico ya que no funciona como fecha  el modelo, pero lo guardo en otra columna4
+###modelos
+
+shapiro.test(TRW_patogeno_DBH_H$TRW_mean) ###no es normal, poor lo tanto cambio los datos a normales
+skewness(TRW_patogeno_DBH_H$TRW_mean, na.rm = TRUE) #veo que dispersion tiene los datos
+TRW_patogeno_DBH_H$TRW_trans <- log10(TRW_patogeno_DBH_H$TRW_mean +1) ##realizo la transformacion
+qqnorm(TRW_patogeno_DBH_H$TRW_trans)
+qqline(TRW_patogeno_DBH_H$TRW_trans)
+shapiro.test(EW20.21$trans) ###veo que mis datos ya son normales
+hist(EW20.21$trans)
+
+
+###no utilizo la H porque esta correlacionada con el DBH
+TRW_patogeno_DBH_H$DBH_.cm. <- TRW_patogeno_DBH_H$`DBH_(cm)`
+TRW_patogeno_DBH_H$Diametro_copa_.cm. <- TRW_patogeno_DBH_H$`Diametro_copa_(cm)`
+
+
+modelo1 <- gamm4(TRW_trans ~ s(date1)+s(Pci) + Tratam + s(DBH_.cm.) + s(Diametro_copa_.cm.),data = TRW_patogeno_DBH_H, random=~(1|Plot/indv))
+
+modelo2 <- gamm4(TRW_trans ~ s(date1)+s(Pci) + Tratam + s(DBH_.cm.) ,data = TRW_patogeno_DBH_H, random=~(1|Plot/indv))
+
+modelo3 <- gamm4(TRW_trans ~ s(date1)+s(Pci) + Tratam + s(Diametro_copa_.cm.),data = TRW_patogeno_DBH_H, random=~(1|Plot/indv))
+
+
+modelo4 <- gamm4(TRW_trans ~ s(date1)+s(Pci) + s(DBH_.cm.) + s(Diametro_copa_.cm.),data = TRW_patogeno_DBH_H, random=~(1|Plot/indv))
+
+modelo5 <- gamm4(TRW_trans ~ s(date1)+s(Pci) + s(Diametro_copa_.cm.),data = TRW_patogeno_DBH_H, random=~(1|Plot/indv))
+
+modelo6 <- gamm4(TRW_trans ~ s(date1)+s(Pci) + s(DBH_.cm.) ,data = TRW_patogeno_DBH_H, random=~(1|Plot/indv))
+
+modelo8 <- gamm4(TRW_trans ~ s(date1) + Tratam + s(DBH_.cm.) + s(Diametro_copa_.cm.),data = TRW_patogeno_DBH_H, random=~(1|Plot/indv))
+
+modelo9 <- gamm4(TRW_trans ~ s(date1) + s(DBH_.cm.) + s(Diametro_copa_.cm.),data = TRW_patogeno_DBH_H, random=~(1|Plot/indv))
+
+modelo10 <- gamm4(TRW_trans ~ s(date1) + s(Diametro_copa_.cm.),data = TRW_patogeno_DBH_H, random=~(1|Plot/indv))
+
+modelo11 <- gamm4(TRW_trans ~ s(date1) + Tratam,data = TRW_patogeno_DBH_H, random=~(1|Plot/indv))
+
+modelo12 <- gamm4(TRW_trans ~ s(date1)+s(Pci) + Tratam ,data = TRW_patogeno_DBH_H, random=~(1|Plot/indv))
+
+modelo7 <- gamm4(TRW_trans ~ s(date1)+s(Pci) ,data = TRW_patogeno_DBH_H, random=~(1|Plot/indv))
+
+modelo13 <- gamm4(TRW_trans ~ s(date1)+s(DBH_.cm.) ,data = TRW_patogeno_DBH_H, random=~(1|Plot/indv))
+
+model.sel(modelo1$mer, modelo2$mer, modelo3$mer, modelo4$mer, modelo5$mer,modelo7$mer, modelo8$mer, modelo9$mer, modelo10$mer, modelo11$mer,modelo12$mer, modelo13$mer) ###los mas significativos es el modelo 11 con -287.1 de AICc
+summary(modelo1$gam)
+sum(summary(modelo1$gam)$s.table[, "edf"])
+summary(modelo2$gam)
+sum(summary(modelo2$gam)$s.table[, "edf"])
+summary(modelo3$gam)
+sum(summary(modelo3$gam)$s.table[, "edf"])
+summary(modelo4$gam)
+sum(summary(modelo4$gam)$s.table[, "edf"])
+summary(modelo5$gam)
+sum(summary(modelo5$gam)$s.table[, "edf"])
+summary(modelo6$gam)
+sum(summary(modelo6$gam)$s.table[, "edf"])
+summary(modelo7$gam)
+sum(summary(modelo7$gam)$s.table[, "edf"])
+summary(modelo8$gam)
+sum(summary(modelo8$gam)$s.table[, "edf"])
+summary(modelo9$gam)
+sum(summary(modelo9$gam)$s.table[, "edf"])
+summary(modelo10$gam)
+sum(summary(modelo10$gam)$s.table[, "edf"])
+summary(modelo11$gam)
+sum(summary(modelo11$gam)$s.table[, "edf"])
+summary(modelo12$gam)
+sum(summary(modelo12$gam)$s.table[, "edf"])
+summary(modelo13$gam)
+sum(summary(modelo13$gam)$s.table[, "edf"])
+
+###veo la normalidad del modelo
+residuos <- residuals(modelo11$mer)
+qqnorm(residuos)
+qqline(residuos)
+hist(residuos) ###son normales
+
+#### hay significaciancia de crecimiento menor en control
+
+pred1 <- get_predictions(modelo11$gam, 
+                       cond = list(date1 = seq(min(TRW_patogeno_DBH_H$date1, na.rm=T),
+                                            max(TRW_patogeno_DBH_H$date1, na.rm=T), 
+                                            length.out = nrow(TRW_patogeno_DBH_H )),
+                                  Tratam = c("Control", "Sequía"),
+                                  se=T))
+
+pred1$date <- as.Date(pred1$date1)
+
+ggplot(data=pred1)+
+  geom_line(mapping = aes(x=date, y=fit, color= Tratam), show.legend = F)+
+  geom_ribbon(alpha=.4,mapping = aes(x=date, ymin=fit-CI, ymax=fit+CI, fill=Tratam), show.legend = F)+
+  geom_point(data = TRW_patogeno_DBH_H, mapping =  aes(x=date, y=as.numeric(TRW_trans), color=Tratam), show.legend = F)+
+  scale_color_manual(values = c("#1E90FF","#FF4040"))+
+  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text = element_text(color = "black",size = 12),
+        axis.ticks.length  = unit(0.1, "cm"))
+
+
+####ahora lo intento con el TRW diario
+dayTRW_patogeno_DBH_H <- split(TRW_patogeno_DBH_H, TRW_patogeno_DBH_H$indv)
+
+
+dayTRW_patogeno_DBH_H <- lapply(dayTRW_patogeno_DBH_H, function(x){x <-  x[order(as.Date(x$date, format="%y/%m/%d")),]
+diff <- diff(x$TRW_mean)
+diff <- c(0, diff)
+diff <- ifelse(diff < 0, 0, diff)
+x$diff <- diff
+ndays <- diff(x$date1)
+ndays <- c(0, ndays)
+x$days <- ndays
+x$TRW_day <- diff/ndays
+x[is.na(x)] <- 0
+return(x)}) ##ordeno las fechas hago la resta de una menos la otra
+
+dayTRW_patogeno_DBH_H <- do.call(rbind, Map(data.frame, dayTRW_patogeno_DBH_H))
+# 
+# dayTRW_patogeno_DBH_H$diff <- ifelse(dayTRW_patogeno_DBH_H$diff > 1, 0.7, dayTRW_patogeno_DBH_H$diff)
+# dayTRW_patogeno_DBH_H$diff <- ifelse(dayTRW_patogeno_DBH_H$date1 == 19031 , 0 , dayTRW_patogeno_DBH_H$diff) ##medidas de febrero no son muy buenas
+# dayTRW_patogeno_DBH_H$diff <- ifelse((dayTRW_patogeno_DBH_H$date == 19011) & (dayTRW_patogeno_DBH_H$diff > 0.88) , 0 , dayTRW_patogeno_DBH_H$diff) ##para este individuo cogí una zona de elongacion
+# dayTRW_patogeno_DBH_H$diff_mod <- ifelse(dayTRW_patogeno_DBH_H$diff == 0, NA, dayTRW_patogeno_DBH_H$diff)
+
+
+
+
+shapiro.test(dayTRW_patogeno_DBH_H$TRW_day) ##no son normales estos datos, por los tanto, los transformo
+hist(dayTRW_patogeno_DBH_H$TRW_day)
+
+skewness(dayTRW_patogeno_DBH_H$TRW_day, na.rm = TRUE) #veo que dispersion tiene los datos
+dayTRW_patogeno_DBH_H$diff_trans <- log10(dayTRW_patogeno_DBH_H$TRW_day +1) ##realizo la transformacion
+
+ 
+dayTRW_patogeno_DBH_H$diff_trans <- ifelse(dayTRW_patogeno_DBH_H$date1 ==19031, 0, dayTRW_patogeno_DBH_H$diff_trans  ) ###he cogido algo de zonas de elongacion al final de crecimiento
+dayTRW_patogeno_DBH_H$diff_trans <- ifelse(dayTRW_patogeno_DBH_H$date1 == 18977 & dayTRW_patogeno_DBH_H$indv ==47, 0.003 , dayTRW_patogeno_DBH_H$diff_trans  ) 
+
+# dayTRW_patogeno_DBH_H$diff_trans_sin0 <- ifelse(dayTRW_patogeno_DBH_H$diff_trans == 0, NA, dayTRW_patogeno_DBH_H$diff_trans)
+# qqnorm(dayTRW_patogeno_DBH_H$diff_trans_sin0)
+# qqline(dayTRW_patogeno_DBH_H$diff_trans_sin0)
+# shapiro.test(dayTRW_patogeno_DBH_H$diff_trans_sin0) ###veo que mis datos han mejorado la normalidad
+# hist(dayTRW_patogeno_DBH_H$diff_trans_sin0)
+
+
+modelo1 <- gamm4(diff_trans ~ s(date1) + Tratam, data = dayTRW_patogeno_DBH_H, random=~(1|Plot/indv))
+modelo2 <- gamm4(diff_trans ~ s(date1) + Tratam + s(Pci) , data = dayTRW_patogeno_DBH_H, random=~(1|Plot/indv))
+modelo3 <- gamm4(diff_trans ~ s(date1) + Tratam + s(Pci) + s(DBH_.cm.) + s(Diametro_copa_.cm.), data = dayTRW_patogeno_DBH_H, random=~(1|Plot/indv))
+modelo4 <- gamm4(diff_trans ~ s(date1) + s(Pci) + s(DBH_.cm.) + s(Diametro_copa_.cm.), data = dayTRW_patogeno_DBH_H, random=~(1|Plot/indv))
+
+model.sel(modelo1$mer, modelo2$mer, modelo3$mer,modelo4$mer) ###se usa el modelo 1, ya que es el que posee menor AICc
+###veo la normalidad del modelo
+residuos <- residuals(modelo1$mer)
+qqnorm(residuos)
+qqline(residuos)
+hist(residuos) ###son normales
+
+modelo1 <- gamm4(diff_trans ~ s(date1) + Tratam, data = dayTRW_patogeno_DBH_H, random=~(1|Plot/indv))
+
+
+pred_TRWday <- get_predictions(modelo1$gam, 
+                       cond = list(date1 = seq(min(dayTRW_patogeno_DBH_H$date1, na.rm=T),
+                                            max(dayTRW_patogeno_DBH_H$date1, na.rm=T), 
+                                            length.out = nrow(dayTRW_patogeno_DBH_H )),
+                                  Tratam = c("Control", "Sequía"),
+                                  se=T))
+
+pred_TRWday$date <- as.Date(pred_TRWday$date1)
+
+TRW_dayly_Plot <- ggplot(data=pred_TRWday)+
+  geom_line(mapping = aes(x=date, y=fit, color= Tratam), show.legend = F)+
+  geom_ribbon(alpha=.4,mapping = aes(x=date, ymin=fit-CI, ymax=fit+CI, fill=Tratam), show.legend = F)+
+  geom_point(data = dayTRW_patogeno_DBH_H, mapping =  aes(x=date, y=as.numeric(diff_trans), color=Tratam), show.legend = F)+
+  scale_color_manual(values = c("#1E90FF","#FF4040"))+
+  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text = element_text(color = "black",size = 12),
+        axis.ticks.length  = unit(0.1, "cm"))+
+  geom_hline(yintercept = 0)+
+  scale_y_continuous(limits = c(-0.002,0.025))+
+  ylab("log(TRW(mm/day) +1)")
+
+library(plotly)
+ggplotly(TRW_dayly_Plot)
+
+```
+
+```{r Todos los Cortes_Qca, include=FALSE}
+####1-ABRIL-2021
+D1Abr21 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
+    sheet = "1Abr2021") ###abro el archivo
+D1Abr21 <- D1Abr21[!is.na(D1Abr21$Codigo),] ###elimino los individuos que no se han medido
+D1Abr21 <- D1Abr21[!(D1Abr21$N_vasos <= 0),] ###elimino los individuos que se han medido pero no hay crecimiento anual
+
+
+names <- D1Abr21$indv
+path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/c1-4-2021"
+setwd(path)
+name_documents <- list.files(pattern = '*.csv')
+c1A21 <- lapply(name_documents, read_delim, delim = ',')
+
+names(c1A21) <- names
+c1A21 <- lapply(c1A21, function(x) Feret_converter_analisistemporal(x,"mm"))
+
+c1A21 <- bind_rows(c1A21) 
+rownames(c1A21) <- names 
+c1A21$indv <- names
+D1Abr21 <- mutate(D1Abr21, TRW_mean = rowMeans(select(D1Abr21, 
+                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
+D1Abr21 <- select_columns(D1Abr21)
+c1A21 <- merge(c1A21, D1Abr21, by= c("indv", "indv"))
+c1A21 <- Vessel_measurement(c1A21)
+
+
+####15-Abril-2021
+
+D15A21 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
+    sheet = "15Abr2021")
+D15A21 <- D15A21[!is.na(D15A21$Codigo),]
+D15A21 <- D15A21[!(D15A21$N_vasos <= 0),]
+
+names <- D15A21$indv
+path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/d15-4-2021"
+setwd(path)
+name_documents <- list.files(pattern = '*.csv')
+DD15A21 <- lapply(name_documents, read_delim, delim = ',')
+
+
+names(DD15A21) <- names
+DD15A21 <- lapply(DD15A21, function(x) Feret_converter_analisistemporal(x,"mm"))
+DD15A21 <- bind_rows(DD15A21) 
+rownames(DD15A21) <- names 
+DD15A21$indv <- names
+D15A21 <- mutate(D15A21, TRW_mean = rowMeans(select(D15A21, 
+                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
+D15A21 <- select_columns(D15A21)
+DD15A21 <- merge(DD15A21, D15A21, by= c("indv", "indv"))
+DD15A21 <- Vessel_measurement(DD15A21)
+
+
+##29-Abril-2021
+
+D29Abr21 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
+    sheet = "29Abr21")
+D29Abr21 <- D29Abr21[!is.na(D29Abr21$Codigo),]
+D29Abr21 <- D29Abr21[!(D29Abr21$N_vasos <= 0),]
+
+
+
+names <- D29Abr21$indv
+path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/e29-4-2021"
+setwd(path)
+name_documents <- list.files(pattern = '*.csv')
+e29Abr21<- lapply(name_documents, read_delim, delim = ',')
+names(e29Abr21) <- names
+e29Abr21 <- lapply(e29Abr21, function(x) Feret_converter_analisistemporal(x,"mm"))
+e29Abr21 <- bind_rows(e29Abr21) 
+rownames(e29Abr21) <- names 
+e29Abr21$indv <- names
+D29Abr21 <- mutate(D29Abr21, TRW_mean = rowMeans(select(D29Abr21, 
+                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
+D29Abr21 <- select_columns(D29Abr21)
+e29Abr21 <- merge(e29Abr21, D29Abr21, by= c("indv", "indv"))
+e29Abr21 <- Vessel_measurement(e29Abr21)
+
+
+##10-Junio-2021
+
+D10J211 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
+    sheet = "10Jun2021")
+D10J211 <- D10J211[!is.na(D10J211$Codigo),]
+D10J211 <- D10J211[!(D10J211$N_vasos <= 0),]
+
+names <- D10J211$indv
+path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/f10-6-2021"
+setwd(path)
+name_documents <- list.files(pattern = '*.csv')
+f10J211<- lapply(name_documents, read_delim, delim = ',')
+names(f10J211) <- names
+f10J211 <- lapply(f10J211, function(x) Feret_converter_analisistemporal(x,"mm"))
+f10J211 <- bind_rows(f10J211) 
+rownames(f10J211) <- names 
+f10J211$indv <- names
+D10J211 <- mutate(D10J211, TRW_mean = rowMeans(select(D10J211, 
+                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
+D10J211 <- select_columns(D10J211)
+f10J211 <- merge(f10J211, D10J211, by= c("indv", "indv"))
+f10J211 <- Vessel_measurement(f10J211)
+
+
+##22-Julio-2021
+
+D22J21 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
+    sheet = "22Jul2021")
+D22J21 <- D22J21[!is.na(D22J21$Codigo),]
+D22J21 <- D22J21[!(D22J21$N_vasos <= 0),]
+
+names <- D22J21$indv
+path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/g22-7-2021"
+setwd(path)
+name_documents <- list.files(pattern = '*.csv')
+g22J21<- lapply(name_documents, read_delim, delim = ',')
+names(g22J21) <- names
+g22J21 <- lapply(g22J21, function(x) Feret_converter_analisistemporal(x,"mm"))
+g22J21 <- bind_rows(g22J21) 
+rownames(g22J21) <- names 
+g22J21$indv <- names
+D22J21 <- mutate(D22J21, TRW_mean = rowMeans(select(D22J21, 
+                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
+D22J21 <- select_columns(D22J21)
+g22J21 <- merge(g22J21, D22J21, by= c("indv", "indv"))
+g22J21 <- Vessel_measurement(g22J21)
+
+
+##9-septiembre-2021
+
+D9S21 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
+    sheet = "9Sep2021")
+D9S21 <- D9S21[!is.na(D9S21$Codigo),]
+D9S21 <- D9S21[!(D9S21$N_vasos <= 0),]
+
+names <- D9S21$indv
+path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/h9-9-2021"
+setwd(path)
+name_documents <- list.files(pattern = '*.csv')
+h9S21<- lapply(name_documents, read_delim, delim = ',')
+names(h9S21) <- names
+h9S21 <- lapply(h9S21, function(x) Feret_converter_analisistemporal(x,"mm"))
+h9S21 <- bind_rows(h9S21) 
+rownames(h9S21) <- names 
+h9S21$indv <- names
+D9S21 <- mutate(D9S21, TRW_mean = rowMeans(select(D9S21, 
+                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
+D9S21 <- select_columns(D9S21)
+h9S21 <- merge(h9S21, D9S21, by= c("indv", "indv"))
+h9S21 <- Vessel_measurement(h9S21)
+
+
+
+##14-Octubre-2021
+
+D14O21 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
+    sheet = "14Oct2021")
+D14O21 <- D14O21[!is.na(D14O21$Codigo),]
+D14O21 <- D14O21[!(D14O21$N_vasos <= 0),]
+
+names <- D14O21$indv
+path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/i14-10-2021"
+setwd(path)
+name_documents <- list.files(pattern = '*.csv')
+i14O21<- lapply(name_documents, read_delim, delim = ',')
+names(i14O21) <- names
+i14O21 <- lapply(i14O21, function(x) Feret_converter_analisistemporal(x,"mm"))
+i14O21 <- bind_rows(i14O21) 
+rownames(i14O21) <- names 
+i14O21$indv <- names
+D14O21 <- mutate(D14O21, TRW_mean = rowMeans(select(D14O21, 
+                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
+D14O21 <- select_columns(D14O21)
+i14O21 <- merge(i14O21, D14O21, by= c("indv", "indv"))
+i14O21 <- Vessel_measurement(i14O21)
+
+
+##18-Noviembre-2021
+
+D18Nov21 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
+    sheet = "18Nov2021")
+D18Nov21 <- D18Nov21[!is.na(D18Nov21$Codigo),]
+D18Nov21 <- D18Nov21[!(D18Nov21$N_vasos <= 0),]
+
+names <- D18Nov21$indv
+path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/j18-11-2021"
+setwd(path)
+name_documents <- list.files(pattern = '*.csv')
+j18Nov21<- lapply(name_documents, read_delim, delim = ',')
+names(j18Nov21) <- names
+j18Nov21 <- lapply(j18Nov21, function(x) Feret_converter_analisistemporal(x,"mm"))
+j18Nov21 <- bind_rows(j18Nov21) 
+rownames(j18Nov21) <- names 
+j18Nov21$indv <- names
+D18Nov21 <- mutate(D18Nov21, TRW_mean = rowMeans(select(D18Nov21, 
+                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
+D18Nov21 <- select_columns(D18Nov21)
+j18Nov21 <- merge(j18Nov21, D18Nov21, by= c("indv", "indv"))
+j18Nov21 <- Vessel_measurement(j18Nov21)
+
+
+##16-Diciembre-2021
+D16Dic21 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
+    sheet = "16Dic2021")
+D16Dic21 <- D16Dic21[!is.na(D16Dic21$Codigo),]
+D16Dic21 <- D16Dic21[!(D16Dic21$N_vasos <= 0),]
+
+names <- D16Dic21$indv
+path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/K16-12-2021"
+setwd(path)
+name_documents <- list.files(pattern = '*.csv')
+k16Dic21<- lapply(name_documents, read_delim, delim = ',')
+names(k16Dic21) <- names
+k16Dic21 <- lapply(k16Dic21, function(x) Feret_converter_analisistemporal(x,"mm"))
+k16Dic21 <- bind_rows(k16Dic21) 
+rownames(k16Dic21) <- names 
+k16Dic21$indv <- names
+D16Dic21 <- mutate(D16Dic21, TRW_mean = rowMeans(select(D16Dic21, 
+                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
+D16Dic21 <- select_columns(D16Dic21)
+k16Dic21 <- merge(k16Dic21, D16Dic21, by= c("indv", "indv"))
+k16Dic21 <- Vessel_measurement(k16Dic21)
+
+
+##19-Enero-2022
+D19En22 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
+    sheet = "19Ene22")
+D19En22 <- D19En22[!is.na(D19En22$Codigo),]
+D19En22 <- D19En22[!(D19En22$N_vasos <= 0),]
+
+names <- D19En22$indv
+path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/l19-1-2022"
+setwd(path)
+name_documents <- list.files(pattern = '*.csv')
+l19En22<- lapply(name_documents, read_delim, delim = ',')
+names(l19En22) <- names
+l19En22 <- lapply(l19En22, function(x) Feret_converter_analisistemporal(x,"mm"))
+l19En22 <- bind_rows(l19En22) 
+rownames(l19En22) <- names 
+l19En22$indv <- names
+D19En22 <- mutate(D19En22, TRW_mean = rowMeans(select(D19En22, 
+                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
+D19En22 <- select_columns(D19En22)
+l19En22 <- merge(l19En22, D19En22, by= c("indv", "indv"))
+l19En22 <- Vessel_measurement(l19En22)
+
+
+
+##8-Febrero-2022
+
+D8Feb22 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
+    sheet = "8Feb22")
+D8Feb22 <- D8Feb22[!is.na(D8Feb22$Codigo),]
+D8Feb22 <- D8Feb22[!(D8Feb22$N_vasos <= 0),]
+
+names <- D8Feb22$indv
+path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/m8-2-2022"
+setwd(path)
+name_documents <- list.files(pattern = '*.csv')
+m8Feb22<- lapply(name_documents, read_delim, delim = ',')
+names(m8Feb22) <- names
+m8Feb22 <- lapply(m8Feb22, function(x) Feret_converter_analisistemporal(x,"mm"))
+m8Feb22 <- bind_rows(m8Feb22) 
+rownames(m8Feb22) <- names 
+m8Feb22$indv <- names
+D8Feb22 <- mutate(D8Feb22, TRW_mean = rowMeans(select(D8Feb22, 
+                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
+D8Feb22 <- select_columns(D8Feb22)
+m8Feb22 <- merge(m8Feb22, D8Feb22, by= c("indv", "indv"))
+m8Feb22 <- Vessel_measurement(m8Feb22)
+
+
+```
+
+```{r Unificacion Cortes_Qca, include=FALSE}
+Cortes_Qca <- list("c1A21" =c1A21,"DD15A21"=DD15A21,"e29Abr21" = e29Abr21, "f10J211" = f10J211, "g22J21"=g22J21,    "h9S21"=h9S21 ,"i14O21"=i14O21, 
+               "j18Nov21" = j18Nov21, "k16Dic21"=k16Dic21, "l19En22" = l19En22 ,"m8Feb22" = m8Feb22)
+
+fechas <- as.Date(c("2021/04/01", "2021/04/15", "2021/04/29", "2021/06/10", "2021/07/22" ,"2021/09/09","2021/10/14", "2021/11/18","2021/12/16", "2022/01/19", "2022/02/08"))
+
+x <- 0
+while (x < length(Cortes_Qca)) {
+  x <- x +1
+  Cortes_Qca[[x]]$date <- fechas[x]
+}
+
+Cortes_Qca <- do.call(rbind, Map(data.frame, Cortes_Qca))
+
+
+
+Cortes_Qca$vessel_frequency[Cortes_Qca$vessel_frequency >= 100] <- 50
+Cortes_Qca$Dh[Cortes_Qca$Dh >= 80] <- 0.09895
+
+
+###hacer modelo de dh y de vessel frequency modelo gamm
+
+
+Cortes_Qca$date1 <- as.numeric(Cortes_Qca$date)
+Cortes_Qca$vessel_frequency
+Cortes_Qca$Plot <- ifelse( (Cortes_Qca$indv == 2) | (Cortes_Qca$indv == 3) | (Cortes_Qca$indv == 5), 1,
+                           ifelse((Cortes_Qca$indv == 8) | (Cortes_Qca$indv == 9) | (Cortes_Qca$indv == 10), 2 ,
+                                  ifelse((Cortes_Qca$indv == 18) | (Cortes_Qca$indv == 19), 3 ,
+                                         ifelse((Cortes_Qca$indv == 26) | (Cortes_Qca$indv == 30), 4 ,
+                                  ifelse((Cortes_Qca$indv == 36) | (Cortes_Qca$indv == 40) | (Cortes_Qca$indv == 44), 5 ,
+                                  ifelse((Cortes_Qca$indv == 47) | (Cortes_Qca$indv == 52), 6 , FALSE))))))
+
+Cortes_Qca_modelo <- merge(Cortes_Qca, DBH_H, by= c("indv","indv"))
+Cortes_Qca_modelo[63, 14 ] = 53
+Cortes_Qca_modelo[16, 14 ] = 60
+
+shapiro.test(Cortes_Qca_modelo$Dh)
+Cortes_Qca_modelo$Plot <- as.factor(Cortes_Qca_modelo$Plot)
+Cortes_Qca_modelo$indv <- as.factor(Cortes_Qca_modelo$indv)
+
+# modelo_dh1 <- gamm4(Dh ~ s(date1)+ Tratam + s(DBH_.cm.),data = Cortes_Qca_modelo, random=~(1|Plot/indv))
+# modelo_dh2 <- gamm4(Dh ~ s(date1)+ Tratam + s(Diametro_copa_.cm.),data = Cortes_Qca_modelo, random=~(1|Plot/indv))
+# modelo_dh3 <- gamm4(Dh ~ s(date1)+ s(DBH_.cm.) + s(Diametro_copa_.cm.),data = Cortes_Qca_modelo, random=~(1|Plot/indv))
+# 
+# model.sel(modelo_dh1$mer, modelo_dh2$mer,modelo_dh3$mer)  ##da significativo  el modelo 1, siendo el mejor modelo, aunque no hay mucha diferencia con el modelo 2, siendo más simple el 2, por ello elijo el modelo 2
+# summary(modelo_dh1$gam)
+# 
+# 
+# # simulateResiduals(modelo_dh1$mer, plot = T)
+# qqnorm(modelo_dh1$gam$residuals)
+# qqline(modelo_dh1$gam$residuals)
+# hist(modelo_dh1$gam$residuals) ###es el mejor modelo y sigue la normalidad
+# 
+# summary(modelo_dh1$gam)
+# 
+# #############no es significativa la tendencia de Dh
+# pred2 <- get_predictions(modelo_dh1$gam, 
+#                        cond = list(date1 = seq(min(Cortes_Qca_modelo$date1, na.rm=T),
+#                                             max(Cortes_Qca_modelo$date1, na.rm=T), 
+#                                             length.out = nrow(Cortes_Qca_modelo )),
+#                                   Tratam = c("Control", "Sequía"),
+#                                   se=T))
+# 
+# pred2$date <- as.Date(pred2$date1)
+# 
+# ggplot(data=pred2)+
+#   geom_line(mapping = aes(x=date, y=fit, color= Tratam), show.legend = F)+
+#   geom_ribbon(alpha=.4,mapping = aes(x=date, ymin=fit-CI, ymax=fit+CI, fill=Tratam), show.legend = T)+
+#   geom_point(data = Cortes_Qca_modelo, mapping =  aes(x=date, y=as.numeric(Dh), color=Tratam), show.legend = F)+
+#   scale_color_manual(values = c("#1E90FF","#FF4040"))+
+#   scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
+#   theme(panel.background = element_rect(fill = "white"),
+#           axis.line.x = element_line(colour="black"),
+#           axis.line.y = element_line(colour="black"),
+#         axis.text = element_text(color = "black",size = 12),
+#         axis.ticks.length  = unit(0.1, "cm"))+
+#   scale_x_date(date_breaks = "2 month" ,date_labels = "%m")+
+#   ylab("Dh")
+
+
+#############################
+
+######hora hago los cambios para la vessel frequency
+
+shapiro.test(Cortes_Qca_modelo$vessel_frequency) ##no es normal, por lo cual lo transformo
+qqnorm(Cortes_Qca_modelo$vessel_frequency)
+qqline(Cortes_Qca_modelo$vessel_frequency)
+hist(Cortes_Qca_modelo$vessel_frequency)
+skewness(Cortes_Qca_modelo$vessel_frequency, na.rm = TRUE) #veo que dispersion tiene los datos
+
+Cortes_Qca_modelo$vessel_frequency_trans <- log10(Cortes_Qca_modelo$vessel_frequency) ##realizo la transformacion
+hist(Cortes_Qca_modelo$vessel_frequency_trans)
+
+qqnorm(Cortes_Qca_modelo$vessel_frequency_trans)
+qqline(Cortes_Qca_modelo$vessel_frequency_trans)
+shapiro.test(Cortes_Qca_modelo$vessel_frequency_trans) ###veo que mis datos han mejorado la normalidad
+
+ Cortes_Qca_modelo$vessel_frequency_trans <- ifelse( (Cortes_Qca_modelo$date1 == 18977 ) & (Cortes_Qca_modelo$Tratam == "Control" ) &  (Cortes_Qca_modelo$vessel_frequency_trans < 1 ), 1.5, Cortes_Qca_modelo$vessel_frequency_trans)
+ 
+ Cortes_Qca_modelo$DBH_.cm. <-  Cortes_Qca_modelo$`DBH_(cm)`
+  Cortes_Qca_modelo$Diametro_copa_.cm. <-  Cortes_Qca_modelo$`Diametro_copa_(cm)`
+ 
+
+modelo1_vesselfreq <- gamm4(vessel_frequency_trans ~ s(date1)+ Tratam  + s(DBH_.cm.),data = Cortes_Qca_modelo , random=~(1|Plot/indv))
+modelo2_vesselfreq <- gamm4(vessel_frequency_trans ~ s(date1)+ Tratam + s(Diametro_copa_.cm.) ,data = Cortes_Qca_modelo, random=~(1|Plot/indv))
+modelo3_vesselfreq <- gamm4(vessel_frequency_trans ~ s(date1)  + s(DBH_.cm.) + s(Diametro_copa_.cm.),data = Cortes_Qca_modelo, random=~(1|Plot/indv))
+modelo4_vesselfreq <- gamm4(vessel_frequency_trans ~ s(date1)  + s(DBH_.cm.),data = Cortes_Qca_modelo, random=~(1|Plot/indv))
+modelo5_vesselfreq <- gamm4(vessel_frequency_trans ~ s(date1)  + s(Diametro_copa_.cm.),data = Cortes_Qca_modelo, random=~(1|Plot/indv))
+modelo6_vesselfreq <- gamm4(vessel_frequency_trans ~ s(date1)  + Tratam,data = Cortes_Qca_modelo, random=~(1|Plot/indv))
+modelo7_vesselfreq <- gamm4(vessel_frequency_trans ~ s(date1)+ Tratam  + s(DBH_.cm.) + s(Diametro_copa_.cm.),data = Cortes_Qca_modelo , random=~(1|Plot/indv))
+
+
+model.sel(modelo1_vesselfreq$mer, modelo2_vesselfreq$mer,modelo3_vesselfreq$mer, modelo4_vesselfreq$mer, modelo5_vesselfreq$mer, modelo6_vesselfreq$mer, modelo7_vesselfreq$mer) ###el mas significativo seria el 2
+summary(modelo6_vesselfreq$gam)
+qqnorm(modelo1_vesselfreq$gam$residuals)
+qqline(modelo1_vesselfreq$gam$residuals)
+
+summary(modelo1_vesselfreq$gam)
+summary(modelo2_vesselfreq$gam)
+summary(modelo3_vesselfreq$gam)
+summary(modelo4_vesselfreq$gam)
+summary(modelo5_vesselfreq$gam)
+summary(modelo6_vesselfreq$gam)
+summary(modelo7_vesselfreq$gam)
+sum(summary(modelo1_vesselfreq$gam)$s.table[, "edf"])
+sum(summary(modelo2_vesselfreq$gam)$s.table[, "edf"])
+sum(summary(modelo3_vesselfreq$gam)$s.table[, "edf"])
+sum(summary(modelo4_vesselfreq$gam)$s.table[, "edf"])
+sum(summary(modelo5_vesselfreq$gam)$s.table[, "edf"])
+sum(summary(modelo6_vesselfreq$gam)$s.table[, "edf"])
+sum(summary(modelo7_vesselfreq$gam)$s.table[, "edf"])
+
+pred1 <- get_predictions(modelo1_vesselfreq$gam, 
+                       cond = list(date1 = seq(min(Cortes_Qca_modelo$date1, na.rm=T),
+                                            max(Cortes_Qca_modelo$date1, na.rm=T), 
+                                            length.out = nrow(Cortes_Qca_modelo )),
+                                  Tratam = c("Control", "Sequía"),
+                                  se=T))
+
+pred1$date <- as.Date(pred1$date1)
+
+ggplot(data=pred1)+
+  geom_line(mapping = aes(x=date, y=fit, color= Tratam), show.legend = F)+
+  geom_ribbon(alpha=.4,mapping = aes(x=date, ymin=fit-CI, ymax=fit+CI, fill=Tratam), show.legend = T)+
+  geom_point(data = Cortes_Qca_modelo, mapping =  aes(x=date, y=as.numeric(vessel_frequency_trans), color=Tratam), show.legend = F)+
+  scale_color_manual(values = c("#1E90FF","#FF4040"))+
+  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text = element_text(color = "black",size = 12),
+        axis.ticks.length  = unit(0.1, "cm"))+
+  scale_x_date(date_breaks = "2 month" ,date_labels = "%m")
+
+
+
+
+
+
+
+
+
+```
+
+```{r Modificacion Txemi_Escojo los vasos por fecha (hacer por fechas), include=FALSE}
+path <-  c("C:/Minicores/Qca_Bruto/ImageJ/Tablas/c1-4-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/d15-4-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/e29-4-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/f10-6-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/g22-7-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/h9-9-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/i14-10-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/j18-11-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/k16-12-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/l19-1-2022","C:/Minicores/Qca_Bruto/ImageJ/Tablas/m8-2-2022")
+
+x <- 0
+date_vess <- list("c1A21" = NA,"DD15A21"=NA,"e29Abr21" = NA, "f10J211" = NA, "g22J21"=NA,    "h9S21"=NA ,"i14O21"=NA, 
+               "j18Nov21" = NA, "k16Dic21"=NA, "l19En22" = NA ,"m8Feb22" = NA)
+
+
+while(x < length(path)){
+  x <-  x +1
+  setwd(path[x])
+  name_documents <- list.files(pattern = '*.csv')
+  docum <- lapply(name_documents, read_delim, delim = ',')
+  names(docum) <- name_documents
+  date_vess[[x]] <- docum
+}
+########una vez cargado todo, miro como va variando dependiendo de la diferencia de TRW, por lo cual elimino en cada fecha los vasos ya formados
+##lo voy ha hacer por indv
+##indv 2
+date_vess$f10J211$a2QcC10J21.csv <- date_vess$f10J211$a2QcC10J21.csv[date_vess$f10J211$a2QcC10J21.csv$` ` != 1 | date_vess$f10J211$a2QcC10J21.csv$` ` != 2 | date_vess$f10J211$a2QcC10J21.csv$` ` != 3 | date_vess$f10J211$a2QcC10J21.csv$` ` != 4, ]
+
+date_vess$g22J21$a2QcC22J21.csv[date_vess$g22J21$a2QcC22J21.csv$` ` == 2 | date_vess$g22J21$a2QcC22J21.csv$` ` ==  4 , ]
+
+date_vess$h9S21$`2QcC9S21.csv` <- date_vess$h9S21$`2QcC9S21.csv`[date_vess$h9S21$`2QcC9S21.csv`$` ` == 5 | date_vess$h9S21$`2QcC9S21.csv`$` ` ==  7 | date_vess$h9S21$`2QcC9S21.csv`$` ` ==  8 | date_vess$h9S21$`2QcC9S21.csv`$` ` ==  11 | date_vess$h9S21$`2QcC9S21.csv`$` ` ==  14 | date_vess$h9S21$`2QcC9S21.csv`$` ` ==  16 | date_vess$h9S21$`2QcC9S21.csv`$` ` ==  17 | date_vess$h9S21$`2QcC9S21.csv`$` ` ==  19  | date_vess$h9S21$`2QcC9S21.csv`$` ` ==  20  | date_vess$h9S21$`2QcC9S21.csv`$` ` ==  21  | date_vess$h9S21$`2QcC9S21.csv`$` ` ==  23 | date_vess$h9S21$`2QcC9S21.csv`$` ` ==   24 , ]
+
+date_vess$i14O21$a2QcC14O21.csv <- NULL
+
+date_vess$j18Nov21$a2QcC18N21.csv <- date_vess$j18Nov21$a2QcC18N21.csv [date_vess$j18Nov21$a2QcC18N21.csv$` ` == 1 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==  2 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==  3 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==  5 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==  6 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==  8 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==  9 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==  10   | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==  11 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==  13 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==  14 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   17  | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   18 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   22 
+ | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   27 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   23 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   21 
+ | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   25 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   29 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   26 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   31 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   32 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   33 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   35 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   34 , ]
+
+
+date_vess$k16Dic21$`2QcC16D21.csv` <- date_vess$k16Dic21$`2QcC16D21.csv` [date_vess$k16Dic21$`2QcC16D21.csv` $` ` == 1 | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==  4 | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==  9 | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==  8 | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==  7 | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==  14 | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==  12 | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==  13   | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==  20 | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==  27 | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==  28 | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==   25  | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==   24, ]
+
+date_vess$l19En22$a2QcC19E22.csv <- date_vess$l19En22$a2QcC19E22.csv [date_vess$l19En22$a2QcC19E22.csv$` ` == 8 | date_vess$l19En22$a2QcC19E22.csv $` ` ==  7 | date_vess$l19En22$a2QcC19E22.csv $` ` ==  15 | date_vess$l19En22$a2QcC19E22.csv $` ` ==  20 | date_vess$l19En22$a2QcC19E22.csv $` ` ==  23 | date_vess$l19En22$a2QcC19E22.csv $` ` ==  26 | date_vess$l19En22$a2QcC19E22.csv $` ` ==  27 | date_vess$l19En22$a2QcC19E22.csv $` ` ==  30   | date_vess$l19En22$a2QcC19E22.csv $` ` ==  34 | date_vess$l19En22$a2QcC19E22.csv $` ` ==  37 | date_vess$l19En22$a2QcC19E22.csv $` ` ==  40 | date_vess$l19En22$a2QcC19E22.csv $` ` ==   44, ]
+
+
+date_vess$m8Feb22$a2QcC2F22.csv <- NULL
+
+###indv3
+
+date_vess$e29Abr21$b3QcC29A21.csv <- date_vess$e29Abr21$b3QcC29A21.csv[date_vess$e29Abr21$b3QcC29A21.csv$` ` == 3 | date_vess$e29Abr21$b3QcC29A21.csv$` ` == 2, ]
+
+
+
+date_vess$f10J211$b3QcC10J21.csv <- date_vess$f10J211$b3QcC10J21.csv[date_vess$f10J211$b3QcC10J21.csv$` ` == 1 | date_vess$f10J211$b3QcC10J21.csv$` ` == 2 | date_vess$f10J211$b3QcC10J21.csv$` ` == 3 | date_vess$f10J211$b3QcC10J21.csv$` ` ==  5 | date_vess$f10J211$b3QcC10J21.csv$` ` ==  6 | date_vess$f10J211$b3QcC10J21.csv$` ` ==  7 | date_vess$f10J211$b3QcC10J21.csv$` ` ==  8, ]
+
+date_vess$g22J21$b3QcC22J21.csv <- date_vess$g22J21$b3QcC22J21.csv[date_vess$g22J21$b3QcC22J21.csv$` ` == 1 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  2 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  4 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  6 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  9 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  16 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  12 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  8 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  7 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  13 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  21 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  22 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  23 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  24, ]
+
+date_vess$h9S21$`3QcC9S21.csv` <- date_vess$h9S21$`3QcC9S21.csv`[date_vess$h9S21$`3QcC9S21.csv`$` ` == 5 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==  16 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==  18 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==  25 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==  26 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==  28 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==  29 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==  32  | date_vess$h9S21$`3QcC9S21.csv`$` ` ==  34  | date_vess$h9S21$`3QcC9S21.csv`$` ` ==  41  | date_vess$h9S21$`3QcC9S21.csv`$` ` ==  43 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==   47 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==   48 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==   49 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==   49 , ]
+
+date_vess$i14O21$b3QcC14O21.csv <- date_vess$i14O21$b3QcC14O21.csv[date_vess$i14O21$b3QcC14O21.csv$` ` == 1 | date_vess$i14O21$b3QcC14O21.csv$` ` ==  2 | date_vess$i14O21$b3QcC14O21.csv$` ` ==  5 | date_vess$i14O21$b3QcC14O21.csv$` ` ==  4 | date_vess$i14O21$b3QcC14O21.csv$` ` ==  3 | date_vess$i14O21$b3QcC14O21.csv$` ` ==  11 | date_vess$i14O21$b3QcC14O21.csv$` ` ==  9 | date_vess$i14O21$b3QcC14O21.csv$` ` ==  23  | date_vess$i14O21$b3QcC14O21.csv$` ` ==  25  | date_vess$i14O21$b3QcC14O21.csv$` ` ==  21  | date_vess$i14O21$b3QcC14O21.csv$` ` ==  18 | date_vess$i14O21$b3QcC14O21.csv$` ` ==   17 | date_vess$i14O21$b3QcC14O21.csv$` ` ==   20 | date_vess$i14O21$b3QcC14O21.csv$` ` ==   19, ]
+
+date_vess$j18Nov21$b3QcC18N21.csv <- NULL
+
+
+date_vess$k16Dic21$`3QcC16D21.csv` <- date_vess$k16Dic21$`3QcC16D21.csv` [date_vess$k16Dic21$`3QcC16D21.csv` $` ` == 4 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   3| date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==  1 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==  9 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==  7 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==  15 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==  14 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==  18   | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==  19 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==  21 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==  23 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   22  | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   27 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   30  | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   38 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   34  | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   33 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   43  | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   46  | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   39  | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   37 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   31  | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   35, ]
+
+date_vess$l19En22$b3QcC19E22.csv <- NULL
+
+
+date_vess$m8Feb22$b3QcC2F22.csv <- NULL
+
+
+###indv5
+
+date_vess$e29Abr21$c5QcC29A21.csv <- date_vess$e29Abr21$c5QcC29A21.csv[date_vess$e29Abr21$c5QcC29A21.csv$` ` == 1 | date_vess$e29Abr21$c5QcC29A21.csv$` ` == 3, ]
+
+
+
+date_vess$f10J211$c5QcC10J21.csv <- NULL
+
+date_vess$g22J21$c5QcC22J21.csv <- date_vess$g22J21$c5QcC22J21.csv[date_vess$g22J21$c5QcC22J21.csv$` ` == 1 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  2 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  3 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  8 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  7 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  4 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  6 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  10 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  12 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  13 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  14 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  15 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  17 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  19 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  21 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  22 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  20 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  18 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  24 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  23 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  27 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  28 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  29 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  32 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  36 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  37 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  34 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  35 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  31 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  33 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  40 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  41 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  42 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  38, ]
+
+date_vess$h9S21$`5QcC9S21.csv` <- NULL
+
+date_vess$l19En22$c5QcC19E22.csv <-   date_vess$l19En22$c5QcC19E22.csv[date_vess$l19En22$c5QcC19E22.csv$` ` == 2 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  5 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  8 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  7 | date_vess$l19En22$c5QcC19E22.csv$` ` ==   9 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  12 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  14 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  16 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  17 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  21 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  22 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  23 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  27 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  30 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  34 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  35, ]
+
+
+date_vess$m8Feb22$c5QcC2F22.csv <- NULL
+
+##indv8
+
+
+date_vess$f10J211$d8QcC10J21.csv <- date_vess$f10J211$d8QcC10J21.csv[date_vess$f10J211$d8QcC10J21.csv$` ` == 1 | date_vess$f10J211$d8QcC10J21.csv$` ` == 2 | date_vess$f10J211$d8QcC10J21.csv$` ` == 3 | date_vess$f10J211$d8QcC10J21.csv$` ` ==  4 | date_vess$f10J211$d8QcC10J21.csv$` ` ==  6 | date_vess$f10J211$d8QcC10J21.csv$` ` ==  7 | date_vess$f10J211$d8QcC10J21.csv$` ` ==  8 | date_vess$f10J211$d8QcC10J21.csv$` ` ==  10 | date_vess$f10J211$d8QcC10J21.csv$` ` ==  11, ]
+
+date_vess$g22J21$d8QcC22J21.csv <- date_vess$g22J21$d8QcC22J21.csv[date_vess$g22J21$d8QcC22J21.csv$` ` == 5 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  7 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  11 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  12 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  14 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  15 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  16 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  19 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  21 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  24 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  25 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  27, ]
+
+date_vess$h9S21$`8QcC9S21.csv` <- NULL
+
+date_vess$i14O21$c8QcC14O21.csv <- NULL
+
+date_vess$j18Nov21$c8QcC18N21.csv <-  date_vess$g22J21$c8QcC18N21.csv[date_vess$g22J21$c8QcC18N21.csv$` ` == 5 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  7 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  11 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  12 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  14 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  15 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  16 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  19 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  21 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  24 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  25 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  27, ]
+
+
+date_vess$k16Dic21$`8QcC16D21.csv` <- date_vess$k16Dic21$`8QcC16D21.csv` [date_vess$k16Dic21$`8QcC16D21.csv` $` ` == 7 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   6| date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==  9 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==  8 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==  12 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==  17 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==  18 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==  15   | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==  22 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==  33 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==  35 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   37  | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   43 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   47  | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   46 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   55  | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   57 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   59  | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   67  | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   65  | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   66 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   70  | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   71 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   74  | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   73, ]
+
+
+
+
+date_vess$m8Feb22$d8QcC2F22.csv <- NULL
+
+##indv9
+
+date_vess$DD15A21$b9QcC15A21s.csv <- date_vess$DD15A21$b9QcC15A21s.csv[date_vess$DD15A21$b9QcC15A21s.csv$` ` == 1 | date_vess$DD15A21$b9QcC15A21s.csv$` ` == 2, ]
+
+date_vess$e29Abr21$d9QcC29A21.csv  <- date_vess$e29Abr21$d9QcC29A21.csv[date_vess$e29Abr21$d9QcC29A21.csv$` ` == 2 | date_vess$e29Abr21$d9QcC29A21.csv$` ` == 3, ]
+
+date_vess$f10J211$g9QcC10J21.csv <- NULL
+
+quitar <- c(1,22,7,19)
+date_vess$g22J21$e9QcC22J21.csv <- date_vess$g22J21$e9QcC22J21.csv[!date_vess$g22J21$e9QcC22J21.csv$` ` %in% quitar , ]
+
+poner <- c(1,10,12,20,21,18)
+date_vess$h9S21$`9QcC9S21.csv` <- date_vess$h9S21$`9QcC9S21.csv`[date_vess$h9S21$`9QcC9S21.csv`$` ` %in% poner , ]
+
+poner <- c(5,8,10,12,14,17,19,22,25)
+date_vess$i14O21$d9QcC14O21.csv <-  date_vess$i14O21$d9QcC14O21.csv[date_vess$i14O21$d9QcC14O21.csv$` ` %in% poner , ]
+
+date_vess$j18Nov21$d9QcC18N21.csv <- NULL
+
+date_vess$l19En22$d9QcC19E22.csv <- NULL
+
+
+#indv10
+
+date_vess$e29Abr21$e10QcC29A21.csv <- NULL
+date_vess$f10J211$h10QcC10J21.csv <- NULL
+
+date_vess$DD15A21$b9QcC15A21s.csv <- date_vess$DD15A21$b9QcC15A21s.csv[date_vess$DD15A21$b9QcC15A21s.csv$` ` == 1 | date_vess$DD15A21$b9QcC15A21s.csv$` ` == 2, ]
+
+quitar <- c(1,3,12,45,36,28)
+date_vess$g22J21$f10QcC22J21.csv <- date_vess$g22J21$f10QcC22J21.csv[!date_vess$g22J21$f10QcC22J21.csv$` ` %in% quitar , ]
+
+
+date_vess$h9S21$`10QcC9S21.csv` <- NULL
+
+poner <- c(3,8,9,12,10,11,15,13,16,17,21,22,23,25,31,35,38)
+date_vess$i14O21$h10QcC14O21.csv <-  date_vess$i14O21$h10QcC14O21.csv[date_vess$i14O21$h10QcC14O21.csv$` ` %in% poner , ]
+
+date_vess$j18Nov21$e10QcC18N21.csv <- NULL
+
+poner <- c(2,3,5,9,14,16,18,22,24,25,26)
+date_vess$k16Dic21$`10QcC16D21.csv` <-  date_vess$k16Dic21$`10QcC16D21.csv`[date_vess$k16Dic21$`10QcC16D21.csv`$` ` %in% poner , ]
+
+date_vess$l19En22$e10QcC19E22.csv <- NULL
+date_vess$m8Feb22$h10QcC2F22.csv <- NULL
+
+#indv18
+
+
+date_vess$DD15A21$d18QcS15A21.csv <- NULL
+date_vess$e29Abr21$f18QcS29A21.csv <- NULL
+
+
+quitar <- c(1,7,5,6)
+date_vess$f10J211$i18QcS10J21.csv <- date_vess$f10J211$i18QcS10J21.csv[!date_vess$f10J211$i18QcS10J21.csv$` ` %in% quitar , ]
+
+poner <- c(2,4,7,5,3,1,14,17,22,28,25,27,24,16,10,8,13)
+date_vess$g22J21$g18QcS22J21.csv <-  date_vess$g22J21$g18QcS22J21.csv [date_vess$g22J21$g18QcS22J21.csv$` ` %in% poner , ]
+
+date_vess$h9S21$`18QcS9S21.csv` <- NULL
+
+poner <- c(20,21,19,18,17,23,24,10,14,9,2,7)
+date_vess$i14O21$i18QcS14O21.csv <-  date_vess$i14O21$i18QcS14O21.csv[date_vess$i14O21$i18QcS14O21.csv$` ` %in% poner , ]
+
+date_vess$j18Nov21$e10QcC18N21.csv <- NULL
+
+
+date_vess$k16Dic21$`18QcS16D21.csv` <- NULL
+
+poner <- c(2,3,5,12,4,9,14,6,33,34,28,25,27,30)
+date_vess$l19En22$h18QcS19E22.csv <- date_vess$l19En22$h18QcS19E22.csv[date_vess$l19En22$h18QcS19E22.csv$` ` %in% poner , ]
+
+##indv19
+
+date_vess$DD15A21$e19QcS15A21.csv <- NULL
+
+quitar <- c(1)
+date_vess$e29Abr21$g19QcS29A21.csv <-  date_vess$e29Abr21$g19QcS29A21.csv[!date_vess$e29Abr21$g19QcS29A21.csv$` ` %in% quitar , ]
+
+
+quitar <- c(1,6,8,14,17,19)
+date_vess$f10J211$j19QcS10J21.csv <- date_vess$f10J211$j19QcS10J21.csv[!date_vess$f10J211$j19QcS10J21.csv$` ` %in% quitar , ]
+
+poner <- c(2,7,13,20,24,12,18,9,5,4,17,26,3,10)
+date_vess$g22J21$h19QcS22J21.csv <-  date_vess$g22J21$h19QcS22J21.csv [date_vess$g22J21$h19QcS22J21.csv$` ` %in% poner , ]
+
+poner <- c(2,8,11,15,19,22,26,27,28)
+date_vess$j18Nov21$g19QcS18N21.csv <- date_vess$j18Nov21$g19QcS18N21.csv [date_vess$j18Nov21$g19QcS18N21.csv$` ` %in% poner , ]
+
+poner <- c(10,17,30,43,45,41,54)
+date_vess$k16Dic21$`19QcS16D21.csv` <- date_vess$k16Dic21$`19QcS16D21.csv` [date_vess$k16Dic21$`19QcS16D21.csv`$` ` %in% poner , ]
+
+date_vess$l19En22$i19QcS19E22.csv <- NULL
+
+poner <- c(28,27,24,44,45)
+date_vess$m8Feb22$i19QcS2F22.csv <- date_vess$m8Feb22$i19QcS2F22.csv [date_vess$m8Feb22$i19QcS2F22.csv$` ` %in% poner , ]
+
+##indv26
+
+date_vess$DD15A21$f26QcS15A21.csv <- NULL
+
+date_vess$e29Abr21$h26QcS29A21.csv <- NULL
+
+quitar <- c(1,2,4)
+date_vess$h9S21$`26QsS9S21.csv` <- date_vess$h9S21$`26QsS9S21.csv`[!date_vess$h9S21$`26QsS9S21.csv`$` ` %in% quitar , ]
+
+
+date_vess$i14O21$j26QcS14O21.csv <- NULL
+
+###indv30
+
+quitar <- c(3)
+date_vess$e29Abr21$i30QcS29A21.csv <-  date_vess$e29Abr21$i30QcS29A21.csv[!date_vess$e29Abr21$i30QcS29A21.csv$` ` %in% quitar , ]
+
+quitar <- c(1,5)
+date_vess$f10J211$k30QcS10J21.csv <- date_vess$f10J211$k30QcS10J21.csv[!date_vess$f10J211$k30QcS10J21.csv$` ` %in% quitar , ]
+
+quitar <- c(1,2,3,6,9,11,20,27,31,38,17,22,26,33,42,45)
+date_vess$g22J21$j30QcS22J21.csv <-  date_vess$g22J21$j30QcS22J21.csv [!date_vess$g22J21$j30QcS22J21.csv$` ` %in% quitar , ]
+
+poner <- c(1,2,6,7,12)
+date_vess$h9S21$`30QsS9S21.csv` <- date_vess$h9S21$`30QsS9S21.csv` [date_vess$h9S21$`30QsS9S21.csv`$` ` %in% poner , ]
+
+date_vess$i14O21$k30QcS14O21.csv <- NULL
+
+date_vess$j18Nov21$h30QcS18N21.csv <- NULL
+
+poner <- c(3,10,17,25)
+date_vess$k16Dic21$`30QcS16D21.csv` <- date_vess$k16Dic21$`30QcS16D21.csv` [date_vess$k16Dic21$`30QcS16D21.csv`$` ` %in% poner , ]
+
+
+date_vess$l19En22$j30QcS19E22.csv <- NULL
+
+poner <- c(10,15,19,22,26,27,33,39,44,46,42,47,51,56,55,57)
+date_vess$m8Feb22$j30QcS2F22.csv <- date_vess$m8Feb22$j30QcS2F22.csv [date_vess$m8Feb22$j30QcS2F22.csv$` ` %in% poner , ]
+
+###indv36
+
+quitar <- c(2,3,5)
+date_vess$e29Abr21$j36QcC29A21.csv <-  date_vess$e29Abr21$j36QcC29A21.csv[!date_vess$e29Abr21$j36QcC29A21.csv$` ` %in% quitar , ]
+
+
+quitar <- c(6,11,12,16,17)
+date_vess$g22J21$k36QcC22J21.csv <-  date_vess$g22J21$k36QcC22J21.csv [!date_vess$g22J21$k36QcC22J21.csv$` ` %in% quitar , ]
+
+poner <- c(3,6,5,7,11,16)
+date_vess$h9S21$`36QsC9S21.csv` <- date_vess$h9S21$`36QsC9S21.csv` [date_vess$h9S21$`36QsC9S21.csv`$` ` %in% poner , ]
+
+
+poner <- c(7,8,9,12,14,15,21,25,23,22,31,35,30,32,27,29,33,34)
+date_vess$i14O21$l36QcC14O21.csv <- date_vess$i14O21$l36QcC14O21.csv [date_vess$i14O21$l36QcC14O21.csv$` ` %in% poner , ]
+
+date_vess$j18Nov21$i36QcC18N21.csv <-  NULL
+
+date_vess$k16Dic21$`36QcC16D21.csv` <- NULL
+
+date_vess$l19En22$k36QcC19E22.csv <- NULL
+
+###indv40
+
+quitar <- c(1,2,5)
+date_vess$f10J211$l40QcC10J21.csv <-  date_vess$f10J211$l40QcC10J21.csv [!date_vess$f10J211$l40QcC10J21.csv$` ` %in% quitar , ]
+
+poner <- c(1,4,9,10,11,16,20,22,24,26,28,31,35,39,38,40,42)
+date_vess$g22J21$l40QcC22J21.csv <-  date_vess$g22J21$l40QcC22J21.csv [date_vess$g22J21$l40QcC22J21.csv$` ` %in% poner , ]
+
+
+date_vess$h9S21$`40QsC9S21.csv` <- NULL
+
+poner <- c(9,12,16,18,20,22)
+date_vess$i14O21$m40QcC14O21.csv <- date_vess$i14O21$m40QcC14O21.csv [date_vess$i14O21$m40QcC14O21.csv$` ` %in% poner , ]
+
+date_vess$j18Nov21$j40cC18N21.csv <-  NULL
+
+poner <- c(3,4,21)
+date_vess$l19En22$m40QcC19E22.csv <- date_vess$l19En22$m40QcC19E22.csv [date_vess$l19En22$m40QcC19E22.csv$` ` %in% poner , ]
+
+poner <- c(13,17,23)
+date_vess$m8Feb22$k40QcC2F22.csv <- date_vess$m8Feb22$k40QcC2F22.csv [date_vess$m8Feb22$k40QcC2F22.csv$` ` %in% poner , ]
+
+###indv44
+
+
+quitar <- c(1,2,5,6)
+date_vess$f10J211$m44QcC10J21.csv <-  date_vess$f10J211$m44QcC10J21.csv [!date_vess$f10J211$m44QcC10J21.csv$` ` %in% quitar , ]
+
+quitar <- c(1,6,8,10,12,13,17,18,19,26,22,25,27,29,32)
+date_vess$g22J21$m44QcC22J21.csv <-  date_vess$g22J21$m44QcC22J21.csv [!date_vess$g22J21$m44QcC22J21.csv$` ` %in% quitar , ]
+
+
+poner <- c(1,2,3,4,5,6,8,12,14,18,22,20,24,25,27,31,35,32,39,41,44,45,47)
+date_vess$h9S21$`44QsC9S21.csv` <- date_vess$h9S21$`44QsC9S21.csv` [date_vess$h9S21$`44QsC9S21.csv`$` ` %in% poner , ]
+
+date_vess$k16Dic21$`44QcC16D21.csv` <- NULL
+
+poner <- c(1,4,6,9,11,12,19,17,21,25,45)
+date_vess$l19En22$n44QcC19E22.csv <- date_vess$l19En22$n44QcC19E22.csv [date_vess$l19En22$n44QcC19E22.csv$` ` %in% poner , ]
+
+date_vess$m8Feb22$l44QcC2F22.csv <- NULL
+
+###indv47
+
+date_vess$c1A21$h47QcS1A21.csv <- NULL
+
+date_vess$e29Abr21$m47QcS29A21.csv <- NULL
+
+quitar <- c(12,13,14,9,18,3)
+date_vess$f10J211$n47QcS10J21.csv <-  date_vess$f10J211$n47QcS10J21.csv [!date_vess$f10J211$n47QcS10J21.csv$` ` %in% quitar , ]
+
+poner <- c(26,7,2,19,5,9,18,24,25,20,13,11,4,22)
+date_vess$g22J21$n47QcS22J21.csv <-  date_vess$g22J21$n47QcS22J21.csv [date_vess$g22J21$n47QcS22J21.csv$` ` %in% poner , ]
+
+date_vess$h9S21$`47QsS9S21.csv` <- NULL
+
+poner <- c(13,14,31,37,38)
+date_vess$i14O21$n47QcS14O21.csv <-  date_vess$i14O21$n47QcS14O21.csv [date_vess$i14O21$n47QcS14O21.csv$` ` %in% poner , ]
+
+date_vess$j18Nov21$k47cS18N21.csv <- NULL
+
+poner <- c(1,2,3,6,7,8,9,11,12,14,18)
+date_vess$k16Dic21$`47QcS16D21.csv` <-  date_vess$k16Dic21$`47QcS16D21.csv` [date_vess$k16Dic21$`47QcS16D21.csv`$` ` %in% poner , ]
+
+date_vess$l19En22$o47QcS19E22.csv <- NULL
+
+###indv52
+
+
+date_vess$e29Abr21$n52QcS29A21.csv <- NULL
+
+quitar <- c(1,3,4,6,7,9,10)
+date_vess$g22J21$o52QcS22J21.csv <-  date_vess$g22J21$o52QcS22J21.csv [!date_vess$g22J21$o52QcS22J21.csv$` ` %in% quitar , ]
+
+poner <- c(3,6,8,12,13,20,23,24)
+date_vess$i14O21$o52QcS14O21.csv <-  date_vess$i14O21$o52QcS14O21.csv [date_vess$i14O21$o52QcS14O21.csv$` ` %in% poner , ]
+
+poner <- c(3,5,7,9,12,14,22,23,24,25)
+date_vess$k16Dic21$`52QcS16D21.csv` <-  date_vess$k16Dic21$`52QcS16D21.csv` [date_vess$k16Dic21$`52QcS16D21.csv`$` ` %in% poner , ]
+
+poner <- c(3,11,12,14,19,26)
+date_vess$l19En22$r52QcS19E22.csv <- date_vess$l19En22$r52QcS19E22.csv[date_vess$l19En22$r52QcS19E22.csv$` ` %in% poner , ]
+
+date_vess$m8Feb22$m52QcS2F22.csv <- NULL
+
+
+```
+
+```{r Modificacion Txemi, include=FALSE}
+
+area_porvaso <- lapply(date_vess, function(x){
+  lapply(x, function(z){z$area_Feret <- 0.785*(z$Feret^2)
+  return(z)})
+  
+})
+
+names(area_porvaso) <- ifelse(names(area_porvaso) =="g22J21", "g22Jul21", names(area_porvaso))
+names(area_porvaso) <- ifelse(names(area_porvaso) =="DD15A21", "D15A21", names(area_porvaso))
+names(area_porvaso) <- ifelse(names(area_porvaso) =="e29Abr21", "e29A21", names(area_porvaso))
+names(area_porvaso) <- ifelse(names(area_porvaso) =="f10J211", "f10J21", names(area_porvaso))
+
+
+meses <- c(
+  A = 4 , J = 6, Jul = 7, S = 9,
+  O = 10, Nov = 11, Dic = 12, En = 1, Feb = 2)
+
+extraer_fecha <- function(codigo) {
+  
+  # Extraer día
+  dia <- as.numeric(str_extract(codigo, "\\d+"))
+  
+  # Extraer la parte de mes y año (lo que queda después del día)
+  resto <- str_extract(codigo, "[A-Za-z]+\\d+$")
+  
+  # Separar mes y año
+  mes_str <- str_extract(resto, "[A-Za-z]+")
+  ano_str <- str_extract(resto, "\\d+")
+  
+  # Buscar el mes en el vector meses
+  mes_num <- meses[mes_str]
+  
+  # Año (por si acaso tiene 2 o más dígitos)
+  
+  # Crear fecha
+  date_char <- paste(paste("20",ano_str, sep = "") ,mes_num, dia, sep = "/")
+  return(date_char)
+} ###extraigo la fecha por el nombre
+
+fechas <- as.character(names(area_porvaso))
+fechas <- sapply(fechas, extraer_fecha)
+fechas <-  as.Date.character(fechas)
+
+x <- 0 
+while(x < length(area_porvaso)){
+  x <- x +1
+  date <- fechas[x]
+  y <- 0
+  while(y < length(area_porvaso[[x]])){
+    y <- y+1
+    area_porvaso[[x]][[y]]$fecha <- date
+  }
+  rm(y)
+} ##le añado la fecha
+rm(x)
+
+##añadimos el individuo
+extraer_individuo <- function(nombre) {
+  num <- regmatches(nombre, regexpr("[0-9]+", nombre))  # Busca el primer número
+  as.numeric(num)}
+
+area_porvaso <- lapply(area_porvaso, function(df){
+  nombres <- names(df)
+  individuos <- sapply(nombres, extraer_individuo)
+  z <- 0
+  while(z < length(df)){
+    z <- z+1
+    df[[z]]$indv <- individuos[z]
+  }
+  df <- lapply(df, function(y){
+  y <- data_frame("area_Feret "= y$area_Feret, "fecha" = y$fecha, "indv" = y$indv)
+  return(y)
+  })
+  return(df)
+}) ##creo el data frame con el indiviuo y las variables que necesito
+
+###voy a aliminar las ventanas temporales de mas de 1 mes
+area_porvaso$i14O21$m40QcC14O21.csv <- NULL
+area_porvaso$i14O21$i18QcS14O21.csv <- NULL
+area_porvaso$i14O21$h10QcC14O21.csv <- NULL
+area_porvaso$k16Dic21$`8QcC16D21.csv` <- NULL
+area_porvaso$l19En22$n44QcC19E22.csv <- NULL
+area_porvaso$i14O21$o52QcS14O21.csv <- NULL
+
+
+area_porvaso_unido <- do.call(rbind, Map(data.frame, lapply(area_porvaso, function(x){ do.call(rbind, Map(data.frame, x))})))
+
+control <- c(2,3,5,8,9,10,36,40,44)
+area_porvaso_unido$treatment <- ifelse(area_porvaso_unido$indv %in% control, "control", "drought")
+
+area_porvaso_unido$area_Feret. <-  ifelse(area_porvaso_unido$fecha == as.Date("2021-04-29
+") & area_porvaso_unido$indv == 40, NA, area_porvaso_unido$area_Feret. )
+
+area_porvaso_unido$area_Feret. <-  ifelse(area_porvaso_unido$fecha == as.Date("2021-11-18") & area_porvaso_unido$area_Feret. >0.01 , NA, area_porvaso_unido$area_Feret. ) ##vasos de la fecha anterior
+
+
+Total_areavessel <- ggplot(area_porvaso_unido, aes(x= as.factor(fecha), y= area_Feret., fill= as.factor(treatment)))+
+           geom_boxplot()+
+  theme_classic()+
+  ylab("area por vaso (mm^2)")+
+  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))
+
+
+area_porvaso_unido_sinEW <- area_porvaso_unido
+area_porvaso_unido_sinEW$fecha <- ifelse(area_porvaso_unido_sinEW$fecha == as.Date("2021-04-01") | area_porvaso_unido_sinEW$fecha == as.Date("2021-04-15") | area_porvaso_unido_sinEW$fecha == as.Date("2021-04-29"), NA, area_porvaso_unido_sinEW$fecha )
+
+area_porvaso_unido_sinEW <- area_porvaso_unido_sinEW[complete.cases(area_porvaso_unido_sinEW), ]
+
+LW_areavessel <- ggplot(area_porvaso_unido_sinEW, aes(x= as.factor(fecha), y= area_Feret., fill= as.factor(treatment)))+
+           geom_boxplot(show.legend = F)+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text = element_text(color = "black",size = 12),
+        axis.ticks.length  = unit(0.1, "cm"))+
+  ylab(" ")+
+  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
+  scale_y_continuous(limits = c(0,0.02))+
+  xlab("date")
+
+
+area_porvaso_unido_EW <- area_porvaso_unido
+area_porvaso_unido_EW$fecha <- ifelse(area_porvaso_unido_EW$fecha == as.Date("2021-04-01") | area_porvaso_unido_EW$fecha == as.Date("2021-04-15") | area_porvaso_unido_EW$fecha == as.Date("2021-04-29"), area_porvaso_unido_EW$fecha,  NA )
+area_porvaso_unido_EW <- area_porvaso_unido_EW[complete.cases(area_porvaso_unido_EW), ]
+
+EW_areavessel <- ggplot(area_porvaso_unido_EW, aes(x= as.factor(fecha), y= area_Feret., fill= as.factor(treatment)))+
+           geom_boxplot(show.legend = F)+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text = element_text(color = "black",size = 12),
+        axis.ticks.length  = unit(0.1, "cm"))+
+  ylab(" ")+
+  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
+  scale_y_continuous()+
+  xlab("date")
+
+
+ggplot(area_porvaso_unido, aes(x= fecha, y= area_Feret., color = treatment))+
+           geom_point()+
+  geom_smooth()+
+  theme_classic()+
+  ylab("area por vaso (mm^2)")+
+  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
+  scale_color_manual(values = c("#1E90FF","#FF4040"))
+
+
+
+area_porvaso_unido$area_Feret_mod <- log(area_porvaso_unido$area_Feret.)
+area_porvaso_unido$date1 <- as.numeric(area_porvaso_unido$fecha)
+##########por aqui
+
+area_porvaso_unido_DBH <- merge(area_porvaso_unido, DBH_H, by= c("indv","indv"))
+
+area_porvaso_unido_DBH$DBH_cm  <- area_porvaso_unido_DBH$`DBH_(cm)` 
+area_porvaso_unido_DBH$Diametro_copa_cm <- area_porvaso_unido_DBH$`Diametro_copa_(cm)`
+
+trend_areaves1 <- gamm4(data =area_porvaso_unido_DBH, area_Feret. ~ s(date1) + treatment , random=~(1|indv))
+trend_areaves2 <- gamm4(data =area_porvaso_unido_DBH, area_Feret. ~ s(date1) + s(DBH_cm) , random=~(1|indv))
+trend_areaves3 <- gamm4(data =area_porvaso_unido_DBH, area_Feret. ~ s(date1) +   s(Diametro_copa_cm) , random=~(1|indv))
+trend_areaves4 <- gamm4(data =area_porvaso_unido_DBH, area_Feret. ~ s(date1) + s(DBH_cm) + treatment , random=~(1|indv))
+trend_areaves4 <- gamm4(data =area_porvaso_unido_DBH, area_Feret. ~ s(date1) + s(Diametro_copa_cm) + treatment , random=~(1|indv))
+trend_areaves5 <- gamm4(data =area_porvaso_unido_DBH, area_Feret. ~ s(date1) + s(DBH_cm) +  s(Diametro_copa_cm) + treatment , random=~(1|indv))
+trend_areaves6 <- gamm4(data =area_porvaso_unido_DBH, area_Feret. ~ s(date1) + s(DBH_cm) +  s(Diametro_copa_cm), random=~(1|indv))
+trend_areaves7 <- gamm4(data =area_porvaso_unido_DBH, area_Feret. ~ s(date1) + s(DBH_cm) +  s(Diametro_copa_cm) + treatment , random=~(1|indv))
+
+model.sel(trend_areaves1$mer, trend_areaves2$mer,trend_areaves3$mer, trend_areaves4$mer, trend_areaves5$mer, trend_areaves6$mer, trend_areaves7$mer) ###el mas significativo seria el 2
+
+summary(trend_areaves1$gam)
+summary(trend_areaves2$gam)
+summary(trend_areaves3$gam)
+summary(trend_areaves4$gam)
+summary(trend_areaves5$gam)
+summary(trend_areaves6$gam)
+summary(trend_areaves7$gam)
+sum(summary(trend_areaves1$gam)$s.table[, "edf"])
+sum(summary(trend_areaves2$gam)$s.table[, "edf"])
+sum(summary(trend_areaves3$gam)$s.table[, "edf"])
+sum(summary(trend_areaves4$gam)$s.table[, "edf"])
+sum(summary(trend_areaves5$gam)$s.table[, "edf"])
+sum(summary(trend_areaves6$gam)$s.table[, "edf"])
+sum(summary(trend_areaves7$gam)$s.table[, "edf"])
+
+summary(trend_areaves$gam)
+qqnorm(trend_areaves$gam$residuals)
+qqline(trend_areaves$gam$residuals)
+
+
+
+pred1 <- get_predictions(trend_areaves$gam, 
+                       cond = list(date1 = seq(min(area_porvaso_unido$date1, na.rm=T),
+                                            max(area_porvaso_unido$date1, na.rm=T), 
+                                            length.out = nrow(area_porvaso_unido )),
+                                  treatment = c("control", "drought"),
+                                  se=T))
+
+pred1$date <- as.Date(pred1$date1)
+
+###calculo la tendencia pero en el acumulado
+
+
+tendencia_area_vess <- ggplot(data=pred1)+
+  geom_line(mapping = aes(x=date, y=fit, color= treatment), show.legend = F)+
+  geom_ribbon(alpha=.4,mapping = aes(x=date, ymin=fit-CI, ymax=fit+CI, fill=treatment), show.legend = F) +
+  geom_point(data = area_porvaso_unido, mapping =  aes(x=fecha, y=as.numeric(area_Feret.), fill =treatment), show.legend = F, shape = 21, size = 1.7, color = "black", stroke = 1)+
+  scale_color_manual(values = c("#97FFFF","#FF6A6A"))+
+  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text = element_text(color = "black",size = 12),
+        axis.ticks.length  = unit(0.1, "cm"))+
+  xlab("month")+
+  ylab("area por vaso (mm^2)")
+######me queda plotearlo y enviarlo
+
+
+fila_inferior <- plot_grid(EW_areavessel, LW_areavessel, ncol = 2, rel_widths = c(1, 3))
+
+combinado <- plot_grid(tendencia_area_vess, fila_inferior, ncol = 1, rel_heights = c(1, 1))
+
+
+combinado
+
+####ver si hay direncia entre tratamientos
+area_anova <- split(area_porvaso_unido, area_porvaso_unido$fecha)
+lapply(area_anova, function(x){summary(aov(data=x, area_Feret. ~ treatment))})
+
+
+
+```
+
+
+
+```{r MODELOS NO USADOS, include=FALSE}
+
+# plot_model(modelo2, type = "pred") ###todo junto, pero vamos a hacer una linea por tratamiento
+# 
+# Qca_phenology_start_EW <- split(Qca_phenology_start_EW, Qca_phenology_start_EW$Tratam)
+# Qca_phenology_start_EW_control <- Qca_phenology_start_EW$"1"
+# Qca_phenology_start_EW_sequia <- Qca_phenology_start_EW$"0"
+
+
+# #####modelo control
+# glmer_modelo_control <- glmer(data = Qca_phenology_start_EW_control, Inicio_EW ~ date +H_.cm.+ DBH_.cm. + (1|Plot), family =  binomial(link = "logit"))
+# summary(glmer_modelo_control) ###AIC 24.1
+# glm_modelo_control <- glm(data = Qca_phenology_start_EW_control, Inicio_EW ~ date +H_.cm.+ DBH_.cm., family= binomial(link = "logit"))
+# summary(glm_modelo_control) ###AIC 22.062 
+# 
+# 
+# ###modelo sequia
+# glmer_modelo_sequia <- glmer(Inicio_EW ~ date +H_.cm.+ DBH_.cm. + (1 | Plot ), family = binomial(link = "logit"),  data = Qca_phenology_start_EW_sequia, control = glmerControl(tolPwrss=1e2)) ####preguntar paco
+# summary(glmer_modelo_sequia) ##AIC 10
+# glm_modelo_sequia <- glm(data = Qca_phenology_start_EW_sequia, Inicio_EW ~ date +H_.cm.+ DBH_.cm., family= binomial(link = "logit"))
+# summary(glm_modelo_sequia) ##AIC 8
+# 
+# #####se hacen predicts de los modelos
+# 
+# Qca_phenology_start_EW <- do.call(rbind, Map(data.frame, Qca_phenology_start_EW))
+
+```
+
+```{r Relacion_crecimiento clima todo el periodo de crecimiento con Z-score, include=FALSE}
+source("C:/Minicores/R_analisis/Analisis_anatomia/Anatomy_function.R") ##en windows
+setwd("C:/Minicores/R_analisis")
+###primero cremeamos hacemos una tabla con el crecimiento diario del arbol
+Data2021_Bruto <- read_excel_allsheets("Datos_Modificados_Qca.xlsx")
+Data2021_Bruto <- Data2021_Bruto[!names(Data2021_Bruto) %in% c("ray_area","10AGOS_FENO", "2Feb21")] ##elimino los elementos que no necesito
+dates <- as.Date(c( "2021/03/18", "2021/04/01", "2021/04/15", "2021/04/21", "2021/06/10", "2021/07/22", "2021/09/09", "2021/10/14", "2021/11/18", "2021/12/16","2022/01/19", "2022/02/8" )) ##creo un vector con las fecha
+x <- 0
+while(x < length(Data2021_Bruto)){ ##pongo una columna de fechas en cada elemento de la lista
+  x <- x+1
+  Data2021_Bruto[[x]]$date <- dates[x]
+}
+rm(x)
+
+ Data2021_Bruto <- lapply(Data2021_Bruto, function(x){
+  df <- x[!(is.na(x$Area) |x$Area == " ") ,  ] 
+  df <- df[ ,names(df) %in% c("indv" ,"Plot","Tratam", "TRW (mm) arriba", "TRW (mm) centro", "TRW (mm) Abajo","date" ), drop = F]
+  df$TRW_mean <- rowMeans(df[ ,names(df) %in% c("TRW (mm) arriba", "TRW (mm) centro", "TRW (mm) Abajo")], na.rm = T)
+return(df)
+}) ###me creo el TRW medio individual en cada fecha
+
+##calculo el Z-score para estandarizar
+z_score <- lapply(Data2021_Bruto, function(x){
+  x <- x[complete.cases(x), ]
+  x$TRW_mean <- as.numeric(x$TRW_mean)
+  x$z_score <- (x$TRW_mean - mean(mean(x$TRW_mean, na.rm=T)))/ nrow(x)
+  return(x)
+})
+
+
+  Data2021 <- lapply(z_score, function(x){
+  df1 <- aggregate(z_score~ Tratam, x , mean )
+  df2 <- aggregate(z_score~ Tratam,x, se )
+  df <- cbind(df1, df2)
+  names(df)[4] <- "TRW_se"
+  df[3] <- NULL
+  df$date <- x$date[1]
+  return(df)
+}) ###me creo un TRW medio de toda la fecha dependiendo del tratamiento
+
+Data2021 <- do.call("rbind", Data2021) ####esto estaba en el codigo antiguo
+
+
+Data2021 <- split(Data2021, Data2021$Tratam)
+
+Data2021 <- lapply(Data2021, function(x){ 
+  z <- 0
+  while(z < length(x$date)){
+    z <- z+1
+    x$difdate[z] <- difftime(x$date[z], x$date[z-1], units = "days")
+  }
+  x[is.na(x)] <- 0
+  x$TRW_diff <- c(NA, diff(x$z_score))
+  x$TRW_diff[is.na(x$TRW_diff) | x$TRW_diff < 0 ] <- 0
+  x$TRW_daylyincrement <- x$TRW_diff/x$difdate
+  return(x)
+  }) ##esta funcion hace el incremento diario entre fechas
+df_TRW_clima <- lapply(Data2021, function(x){
+  difdate <- x$difdate ###me creo un vector para la diferencia entre fechas
+  z <- 0
+  df <- c()
+  while(z < length(difdate)){ ##creo un vector con las repeticiones de la diferencia de fechas y en su contenido tiene el valor de TRW diario
+    z <- z+1
+    repeticiones <- rep(x$TRW_daylyincrement[z], times = difdate[z]) 
+    df <- c(df, repeticiones)
+  }
+  df_TRW_clima <- data.frame("date" = seq.Date(from = as.Date("2021-03-19"), to= as.Date("2022-02-08"), by= "day"), "TRW_dayly" = df) ###se crea el data frame con las fechas de muestreo y a su vez el acumulado de crecimiento durante el estudio
+  df_TRW_clima$TRW_dayly[1] <- df_TRW_clima$TRW_dayly[1] + x$z_score[1] 
+  df_TRW_clima$TRW_acum <- cumsum(df_TRW_clima$TRW_dayly)
+  
+    return(df_TRW_clima)
+}) ##esta funcion me crea un nuevo data frame donde calculo el acumulado de TRW dia a dia
+
+df_TRW_clima <- lapply(df_TRW_clima, function(x){
+  Gamir_Nov21_clima_Feb22 <- Gamir_Nov21_Feb22_Temp[,!names(Gamir_Nov21_Feb22_Temp) %in% c("PET")]
+  spei_data <- spei_data[,!names(spei_data) %in% c("sing")]
+  names(spei_data)[1] <- "date" 
+  
+  result <- merge(x, Gamir_Nov21_clima_Feb22 , by= c("date", "date"))
+  result <- merge(result, spei_data , by= c("date", "date"))
+  result <- merge(result, HOBO_gamir , by= c("date", "date"))
+  
+  return(result)
+}) ###uno ya el TRW acumualdo, con las variables climaticas
+
+
+###creo las fechas anteriores de este incremento para hacer el los 30 dias antes del inicio de crecimiento
+fecha_anterior <-  data.frame("date"= seq.Date(from = as.Date("2021-01-19"), to= as.Date("2021-03-18"), by= "day"))
+Gamir_Nov21_Feb22_clima <- Gamir_Nov21_Feb22_Temp[,!names(Gamir_Nov21_Feb22_Temp) %in% c("PET")]
+  spei_data <- spei_data[,!names(spei_data) %in% c("sing")]
+  names(spei_data)[1] <- "date" 
+fecha_anterior <- merge(fecha_anterior, Gamir_Nov21_Feb22_clima , by= c("date", "date"))
+fecha_anterior <- merge(fecha_anterior, spei_data , by= c("date", "date"))
+fecha_anterior <- merge(fecha_anterior, HOBO_gamir , by= c("date", "date"), all.x = TRUE)
+
+fecha_anterior$TRW_dayly <- 0
+fecha_anterior$TRW_acum <- 0
+
+df_TRW_clima <- lapply(df_TRW_clima, function(x){
+  df <- rbind(fecha_anterior, x)
+  return(df)}) ###le añado el clima anterior
+
+
+df_lag5 <- lapply(df_TRW_clima, function(x){
+  TRW_acum <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_acum"] ##con esto hago el acumulado desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+  TRW_dayly <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_dayly"]
+  date <-  x[seq(from= 60, to =nrow(x) , by = 1), "date"]##con esto hago el cojo las fechas extradias desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+   fechas <- c("date" = seq.Date(from = as.Date("2021-03-15"), to= as.Date("2022-02-08"), by= "day"))
+   fechas <- x[x$date %in% fechas ,]
+   prp <- fechas$prp
+   temp_min <- fechas$Tmin
+   temp_max <- fechas$Tmax
+   spei <- fechas$spei
+   VPD <- fechas$VPD
+
+   prp_lag5 <- sum_every_n(prp,5)
+   Tmin_lag5 <- mean_every_n(temp_min,5)
+   Tmax_lag5 <- mean_every_n(temp_max,5)
+   spei_lag5 <- mean_every_n(spei,5)
+   VPD_lag5 <- mean_every_n(VPD,5)
+
+  resultado <- data.frame("date" =date  ,"TRW_acum" =TRW_acum, "TRW_dayly" =TRW_dayly, "prp_Acum" = prp_lag5, "Tmin_mean" = Tmin_lag5,
+                          "Tmax_mean"=Tmax_lag5, "spei_mean"=spei_lag5, "VPD"=VPD_lag5 )
+  return(resultado)
+}) ##funcion nueva, creo que es la mas indicada
+
+df_lag10 <- lapply(df_TRW_clima, function(x){
+  TRW_acum <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_acum"] ##con esto hago el acumulado desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+  date <-  x[seq(from= 60, to =nrow(x) , by = 1), "date"]##con esto hago el cojo las fechas extradias desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+  TRW_dayly <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_dayly"]
+   fechas <- c("date" = seq.Date(from = as.Date("2021-03-10"), to= as.Date("2022-02-08"), by= "day"))
+   fechas <- x[x$date %in% fechas ,]
+   prp <- fechas$prp
+   temp_min <- fechas$Tmin
+   temp_max <- fechas$Tmax
+   spei <- fechas$spei
+   VPD <- fechas$VPD
+
+   prp_lag10 <- sum_every_n(prp,10)
+   Tmin_lag10 <- mean_every_n(temp_min,10)
+   Tmax_lag10 <- mean_every_n(temp_max,10)
+   spei_lag10 <- mean_every_n(spei,10)
+   VPD_lag10 <- mean_every_n(VPD,10)
+
+  resultado <- data.frame("date" =date  ,"TRW_acum" =TRW_acum,"TRW_dayly" =TRW_dayly, "prp_Acum" = prp_lag10, "Tmin_mean" = Tmin_lag10,
+                          "Tmax_mean"=Tmax_lag10, "spei_mean"=spei_lag10, "VPD"=VPD_lag10 )
+  return(resultado)
+}) ##funcion nueva, creo que es la mas indicada
+
+df_lag15 <- lapply(df_TRW_clima, function(x){
+  TRW_acum <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_acum"] ##con esto hago el acumulado desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+  TRW_dayly <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_dayly"]
+  date <-  x[seq(from= 60, to =nrow(x) , by = 1), "date"]##con esto hago el cojo las fechas extradias desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+   fechas <- c("date" = seq.Date(from = as.Date("2021-03-05"), to= as.Date("2022-02-08"), by= "day"))
+   fechas <- x[x$date %in% fechas ,]
+   prp <- fechas$prp
+   temp_min <- fechas$Tmin
+   temp_max <- fechas$Tmax
+   spei <- fechas$spei
+   VPD <- fechas$VPD
+
+   prp_lag15 <- sum_every_n(prp,15)
+   Tmin_lag15 <- mean_every_n(temp_min,15)
+   Tmax_lag15 <- mean_every_n(temp_max,15)
+   spei_lag15 <- mean_every_n(spei,15)
+   VPD_lag15 <- mean_every_n(VPD,15)
+
+  resultado <- data.frame("date" =date  ,"TRW_acum" =TRW_acum, "TRW_dayly" =TRW_dayly, "prp_Acum" = prp_lag15, "Tmin_mean" = Tmin_lag15,
+                          "Tmax_mean"=Tmax_lag15, "spei_mean"=spei_lag15, "VPD"=VPD_lag15 )
+  return(resultado)
+}) ##funcion nueva, creo que es la mas indicada
+
+df_lag30 <- lapply(df_TRW_clima, function(x){
+  TRW_acum <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_acum"] ##con esto hago el acumulado desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+  TRW_dayly <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_dayly"]
+  date <-  x[seq(from= 60, to =nrow(x) , by = 1), "date"]##con esto hago el cojo las fechas extradias desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+   fechas <- c("date" = seq.Date(from = as.Date("2021-02-18"), to= as.Date("2022-02-08"), by= "day"))
+   fechas <- x[x$date %in% fechas ,]
+   prp <- fechas$prp
+   temp_min <- fechas$Tmin
+   temp_max <- fechas$Tmax
+   spei <- fechas$spei
+   VPD <- fechas$VPD
+   
+   prp_lag30 <- sum_every_n(prp,30)
+   Tmin_lag30 <- mean_every_n(temp_min,30)
+   Tmax_lag30 <- mean_every_n(temp_max,30)
+   spei_lag30 <- mean_every_n(spei,30)
+   VPD_lag30 <- mean_every_n(VPD,30)
+   
+  resultado <- data.frame("date" =date  ,"TRW_acum" =TRW_acum, "TRW_dayly" = TRW_dayly , "prp_Acum" = prp_lag30, "Tmin_mean" = Tmin_lag30,
+                          "Tmax_mean"=Tmax_lag30, "spei_mean"=spei_lag30, "VPD"=VPD_lag30 )
+  return(resultado)
+}) ##funcion nueva, creo que es la mas indicada
+
+####voy a mirar si son normales las variables para ello hago el test de shapiro para todas las variables
+clima <- df_TRW_clima$Control
+shapiro.test(clima$Tmin) ###no tienen una distribucion normal
+shapiro.test(clima$Tmax) ###no tienen una distribucion normal
+shapiro.test(clima$prp) ###no tienen una distribucion normal
+shapiro.test(clima$spei) ###no tienen una distribucion normal
+
+###por lo tanto tengo que usar r de Spearman para calcular su correlacion
+
+lista_lag <- list("lag5" =df_lag5, "lag10"= df_lag10, "lag15"= df_lag15,"lag30"= df_lag30)
+
+
+
+
+resultados_correlacion_clima <- lapply(lista_lag, function(x){
+  lapply(x, function(y){
+   result_prp <- cor.test(y$TRW_dayly, y$prp_Acum , method = 'spearman', exact= FALSE)
+   result_Tmin <- cor.test(y$TRW_dayly, y$Tmin_mean , method = 'spearman', exact= FALSE )
+   result_Tmax <- cor.test(y$TRW_dayly, y$Tmax_mean , method = 'spearman', exact= FALSE )
+   result_spei <- cor.test(y$TRW_dayly, y$spei_mean , method = 'spearman', exact= FALSE )
+   result_VPD <- cor.test(y$TRW_dayly, y$VPD , method = 'spearman', exact= FALSE )
+   print(result_prp)
+   print(result_Tmin)
+   print( result_Tmax)
+   print(result_spei)
+   print(result_VPD)
+   resultado <- data.frame("prp" =result_prp$estimate, "Tmin" =result_Tmin$estimate, "Tmax"= result_Tmax$estimate, "spei" = result_spei$estimate, "VPD" = result_VPD$estimate)
+   return(resultado)
+   
+   })}) ##spearman exact False ya que hay muchos empates
+
+resultados_correlacion_clima <- lapply(resultados_correlacion_clima, function(x){
+  resultado <- do.call(rbind,Map(data.frame, x) )
+  resultado <- setDT(resultado, keep.rownames = "treatment")[]
+ return(resultado)
+})
+
+nombres <- names(resultados_correlacion_clima)
+x <- 0
+while (x <length(resultados_correlacion_clima)) {
+  x <- x+1
+  resultados_correlacion_clima[[x]]$lag <- nombres[x]
+}
+
+resultados_correlacion_clima <- do.call(rbind,Map(data.frame, resultados_correlacion_clima) )
+resultados_correlacion_clima$trat_lag <- as.factor(paste(resultados_correlacion_clima$treatment, resultados_correlacion_clima$lag, sep = "_"))
+
+
+resultados_correlacion_clima$trat_lag <- fct_relevel(resultados_correlacion_clima$trat_lag,  "Control_lag5", "Control_lag10",  "Control_lag15",  "Control_lag30","Sequía_lag5", "Sequía_lag10","Sequía_lag15",  "Sequía_lag30" )
+
+resultados_correlacion_clima$lag <- fct_relevel(resultados_correlacion_clima$lag,  "lag5","lag10", "lag15", "lag30" )
+
+
+resultados_correlacion_clima_plot <- pivot_longer(resultados_correlacion_clima, cols=c("prp", "Tmin", "Tmax", "spei", "VPD"),
+                    names_to='variable',
+                    values_to='values')
+resultados_correlacion_clima_plot$trat_lag <- as.factor(paste(resultados_correlacion_clima_plot$variable, resultados_correlacion_clima_plot$trat_lag, sep = "_"))
+
+resultados_correlacion_clima_plot$trat_lag <- fct_relevel(resultados_correlacion_clima_plot$trat_lag,  "prp_Control_lag5","prp_Control_lag10", "prp_Control_lag15", "prp_Control_lag30", "prp_Sequía_lag5","prp_Sequía_lag10", "prp_Sequía_lag15", "prp_Sequía_lag30", "Tmin_Control_lag5","Tmin_Control_lag10", "Tmin_Control_lag15", "Tmin_Control_lag30", "Tmin_Sequía_lag5","Tmin_Sequía_lag10", "Tmin_Sequía_lag15", "Tmin_Sequía_lag30", "Tmax_Control_lag5", "Tmax_Control_lag10", "Tmax_Control_lag15", "Tmax_Control_lag30", "Tmax_Sequía_lag5", "Tmax_Sequía_lag10", "Tmax_Sequía_lag15", "Tmax_Sequía_lag30", "spei_Control_lag5", "spei_Control_lag10", "spei_Control_lag15", "spei_Control_lag30", "spei_Sequía_lag5", "spei_Sequía_lag10", "spei_Sequía_lag15", "spei_Sequía_lag30","VPD_Control_lag5","VPD_Control_lag10","VPD_Control_lag15","VPD_Control_lag30", "VPD_Sequía_lag5","VPD_Sequía_lag10","VPD_Sequía_lag15","VPD_Sequía_lag30", )
+
+ggplot(resultados_correlacion_clima_plot, aes(x=as.factor(trat_lag), y= values))+
+  geom_bar(aes(fill=lag), stat="identity")+
+  scale_y_continuous(breaks = c(-0.5,-0.25,0,0.25,0.5), expand = c(-0.5,0.5))+
+  scale_fill_manual(values=c("#008B45","#00FF7F","#5CACEE","slateblue3"))+
+  geom_hline(yintercept = c(-0.16,0.16), color="black", linetype= 2 )+
+  geom_hline(yintercept = 0, color="black", linetype= 1 )+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text = element_text(color = "black",size = 12),
+        axis.ticks.length  = unit(0.25, "cm"))+
+  scale_x_discrete(labels = c(" "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," "  ))
+
+df_TRW_clima_xplot <- do.call(rbind, Map(data.frame, df_TRW_clima))
+df_TRW_clima_xplot <- setDT(df_TRW_clima_xplot, keep.rownames = "treatment")
+df_TRW_clima_xplot$treatment <- ifelse(grepl( "Sequía", df_TRW_clima_xplot$treatment), "drought", "control" )
+
+
+ggplot(df_TRW_clima_xplot, aes(x=date, y= TRW_dayly))+ geom_line(lwd=1)+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"))+
+  facet_grid(. ~ treatment)+
+  scale_x_date(date_breaks = "1 month" ,date_labels = "%m")
+  
+##empiezo poniendole una nueva columna de estaciones
+lista_lag <- lapply(lista_lag, function(x){
+  nombres <- names(x)
+  z <- 0
+  while (z <length(x)) {
+  z <- z+1
+  x[[z]]$treatment <- nombres[z]
+}
+  resultado <- do.call(rbind,Map(data.frame, x) )
+ return(resultado)
+})
+
+nombres <- names(lista_lag)
+x <- 0
+while (x <length(lista_lag)) {
+  x <- x+1
+  lista_lag[[x]]$lag <- nombres[x]
+}
+rm(x)
+lista_lag <- do.call(rbind,Map(data.frame, lista_lag) )
+
+seasons <- c("01" = "Winter", "02" = "Winter","03" = "Spring", "04" = "Spring", "05" = "Spring","06" = "Summer", "07" = "Summer", "08" = "Summer","09" = "Fall", "10" = "Fall", "11" = "Fall","12" = "Winter")
+seasons <-seasons[format(lista_lag$date, "%m")]
+lista_lag$season <- seasons
+
+###separo el data frame dependiendo de la estacion
+seasons <- split(lista_lag, lista_lag$season)
+
+
+###empiezo a hacer el analisis con las estaciones
+
+season_climate <- lapply(seasons, function(x){
+  season <- split(x, x$lag)
+  season <- lapply(season, function(z){split(z, z$treatment)  } )
+  season_correlacion_clima <- lapply(season, function(x){
+  lapply(x, function(y){
+   result_prp <- cor.test(y$TRW_dayly, y$prp_Acum , method = 'spearman', exact= FALSE )
+   result_Tmin <- cor.test(y$TRW_dayly, y$Tmin_mean , method = 'spearman', exact= FALSE )
+   result_Tmax <- cor.test(y$TRW_dayly, y$Tmax_mean , method = 'spearman', exact= FALSE )
+   result_spei <- cor.test(y$TRW_dayly, y$spei_mean , method = 'spearman', exact= FALSE )
+   result_VPD <- cor.test(y$TRW_dayly, y$VPD , method = 'spearman', exact= FALSE )
+   print(result_prp)
+   print(result_Tmin)
+   print( result_Tmax)
+   print(result_spei)
+   print(result_VPD)
+   
+   resultado <- data.frame("prp" =result_prp$estimate, "Tmin" =result_Tmin$estimate, "Tmax"= result_Tmax$estimate, "spei" = result_spei$estimate, "VPD" = result_VPD$estimate)
+   return(resultado)
+   
+   })}) ##kendall ?¿
+
+season_correlacion_clima <- lapply(season_correlacion_clima, function(x){
+  resultado <- do.call(rbind,Map(data.frame, x) )
+  resultado <- setDT(resultado, keep.rownames = "treatment")[]
+ return(resultado)
+})
+
+nombres <- names(season_correlacion_clima)
+x <- 0
+while (x <length(season_correlacion_clima)) {
+  x <- x+1
+  season_correlacion_clima[[x]]$lag <- nombres[x]
+}
+
+season_correlacion_clima <- do.call(rbind,Map(data.frame, season_correlacion_clima) )
+return(season_correlacion_clima)
+
+}) ##aqui uno todo el codigo mediante listas
+
+season_climate_plots <- lapply(season_climate, function(x){
+  x$trat_lag <- as.factor(paste(x$treatment, x$lag, sep = "_"))
+
+x$lag <- fct_relevel(x$lag,  "lag5","lag10", "lag15", "lag30" )
+
+
+season_climate_plots <- pivot_longer(x, cols=c("prp", "Tmin", "Tmax", "spei", "VPD"),
+                    names_to='variable',
+                    values_to='values')
+season_climate_plots$trat_lag <- as.factor(paste(season_climate_plots$variable, season_climate_plots$trat_lag, sep = "_"))
+
+season_climate_plots$trat_lag <- fct_relevel(season_climate_plots$trat_lag,  "prp_Control_lag5","prp_Control_lag10", "prp_Control_lag15", "prp_Control_lag30", "prp_Sequía_lag5","prp_Sequía_lag10", "prp_Sequía_lag15", "prp_Sequía_lag30", "Tmin_Control_lag5","Tmin_Control_lag10", "Tmin_Control_lag15", "Tmin_Control_lag30", "Tmin_Sequía_lag5","Tmin_Sequía_lag10", "Tmin_Sequía_lag15", "Tmin_Sequía_lag30", "Tmax_Control_lag5", "Tmax_Control_lag10", "Tmax_Control_lag15", "Tmax_Control_lag30", "Tmax_Sequía_lag5", "Tmax_Sequía_lag10", "Tmax_Sequía_lag15", "Tmax_Sequía_lag30", "spei_Control_lag5", "spei_Control_lag10", "spei_Control_lag15", "spei_Control_lag30", "spei_Sequía_lag5", "spei_Sequía_lag10", "spei_Sequía_lag15", "spei_Sequía_lag30","VPD_Control_lag5","VPD_Control_lag10","VPD_Control_lag15","VPD_Control_lag30", "VPD_Sequía_lag5","VPD_Sequía_lag10","VPD_Sequía_lag15","VPD_Sequía_lag30", )
+
+ggplot(season_climate_plots, aes(x=as.factor(trat_lag), y= values))+
+  geom_bar(aes(fill=lag), stat="identity")+
+  scale_y_continuous(breaks = c(-1,-0.75,-0.5,-0.25,0,0.25,0.5,0.75,1), limits = c(-1,1.1))+
+  scale_fill_manual(values=c("#008B45","#00FF7F","#5CACEE","slateblue3"))+
+  geom_hline(yintercept = 0, color="black" )+
+  geom_hline(yintercept = c(0.25,-0.25), color="black", linetype=2 )+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text = element_text(color = "black",size = 12),
+        axis.ticks.length  = unit(0.25, "cm"))+
+  scale_x_discrete(labels = c(" "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," "  ))
+  
+}) 
+
+season_climate_plots$Fall
+season_climate_plots$Spring
+season_climate_plots$Summer
+```
+
+```{r Relacion_crecimiento clima todo el periodo de crecimiento con modelo ajustado, include=FALSE}
+source("C:/Minicores/R_analisis/Analisis_anatomia/Anatomy_function.R") ##en windows
+setwd("C:/Minicores/R_analisis")
+###primero cremeamos hacemos una tabla con el crecimiento diario del arbol
+Data2021_Bruto <- read_excel_allsheets("Datos_Modificados_Qca.xlsx")
+Data2021_Bruto <- Data2021_Bruto[!names(Data2021_Bruto) %in% c("ray_area","10AGOS_FENO", "2Feb21")] ##elimino los elementos que no necesito
+dates <- as.Date(c( "2021/03/18", "2021/04/01", "2021/04/15", "2021/04/21", "2021/06/10", "2021/07/22", "2021/09/09", "2021/10/14", "2021/11/18", "2021/12/16","2022/01/19", "2022/02/8" )) ##creo un vector con las fecha
+x <- 0
+while(x < length(Data2021_Bruto)){ ##pongo una columna de fechas en cada elemento de la lista
+  x <- x+1
+  Data2021_Bruto[[x]]$date <- dates[x]
+}
+rm(x)
+
+ Data2021_Bruto <- lapply(Data2021_Bruto, function(x){
+  df <- x[!(is.na(x$Area) |x$Area == " ") ,  ] 
+  df <- df[ ,names(df) %in% c("indv" ,"Plot","Tratam", "TRW (mm) arriba", "TRW (mm) centro", "TRW (mm) Abajo","date" ), drop = F]
+  df$TRW_mean <- rowMeans(df[ ,names(df) %in% c("TRW (mm) arriba", "TRW (mm) centro", "TRW (mm) Abajo")], na.rm = T)
+return(df)
+}) ###me creo el TRW medio individual en cada fecha
+ 
+ ####hago el TRW estandarizado con log +1
+ 
+  Data2021_modelo <- do.call(rbind, Map(data.frame, Data2021_Bruto))
+  Data2021_modelo <- Data2021_modelo[complete.cases(Data2021_modelo), ]
+  Data2021_modelo$TRWlog <- log10(Data2021_modelo$TRW_mean +1)
+  ####no sale normal por los 0
+  Data2021_modelo <- merge(x= DBH_H, y=Data2021_modelo, all.y = T, by= c("indv", "indv"))
+  Data2021_modelogam <- gamm4(data = Data2021_modelo, TRWlog ~  s(as.numeric(date)) + Tratam + s(DBH_.cm.), random = ~(1| Plot))
+  shapiro.test(Data2021_modelogam$gam$residuals)
+
+  pred_gamm4 <- get_predictions(Data2021_modelogam$gam,
+                        cond = list(date = as.numeric(rep(unique(Data2021_modelo$date), 2)),
+                                    DBH_.cm. = mean(Data2021_modelo$DBH_.cm.),
+                                   Tratam = c("Control", "Sequía"),
+                                   se=T))
+
+ pred_gamm4$date <- as.Date(pred_gamm4$date)
+
+  ggplot()+
+    geom_line(data = pred_gamm4, aes(x= date, fit, color= Tratam))+
+   geom_point(data = Data2021_modelo, aes(x= date,TRWlog, color= Tratam))
+
+
+###creo un crecimiento diario del arbol
+pred_gamm4$TRW_mean <- pred_gamm4$fit
+pred_gamm4 <- pred_gamm4[order(pred_gamm4$date),]
+Data2021 <- split(pred_gamm4, pred_gamm4$Tratam)
+
+
+Data2021 <- lapply(Data2021, function(x){ 
+  z <- 0
+  while(z < length(x$date)){
+    z <- z+1
+    x$difdate[z] <- difftime(x$date[z], x$date[z-1], units = "days")
+  }
+  x[is.na(x)] <- 0
+  x$TRW_diff <- c(NA, diff(x$TRW_mean))
+  x$TRW_diff[is.na(x$TRW_diff) | x$TRW_diff < 0 ] <- 0
+  x$TRW_daylyincrement <- x$TRW_diff/x$difdate
+  return(x)
+  }) ##esta funcion hace el incremento diario entre fechas
+df_TRW_clima <- lapply(Data2021, function(x){
+  difdate <- x$difdate ###me creo un vector para la diferencia entre fechas
+  z <- 0
+  df <- c()
+  while(z < length(difdate)){ ##creo un vector con las repeticiones de la diferencia de fechas y en su contenido tiene el valor de TRW diario
+    z <- z+1
+    repeticiones <- rep(x$TRW_daylyincrement[z], times = difdate[z]) 
+    df <- c(df, repeticiones)
+  }
+  df_TRW_clima <- data.frame("date" = seq.Date(from = as.Date("2021-03-19"), to= as.Date("2022-02-08"), by= "day"), "TRW_dayly" = df) ###se crea el data frame con las fechas de muestreo y a su vez el acumulado de crecimiento durante el estudio
+  df_TRW_clima$TRW_dayly[1] <- df_TRW_clima$TRW_dayly[1] + x$TRW_mean[1] 
+  df_TRW_clima$TRW_acum <- cumsum(df_TRW_clima$TRW_dayly)
+  
+    return(df_TRW_clima)
+}) ##esta funcion me crea un nuevo data frame donde calculo el acumulado de TRW dia a dia
+
+df_TRW_clima <- lapply(df_TRW_clima, function(x){
+  Gamir_Nov21_clima_Feb22 <- Gamir_Nov21_Feb22_Temp[,!names(Gamir_Nov21_Feb22_Temp) %in% c("PET")]
+  spei_data <- spei_data[,!names(spei_data) %in% c("sing")]
+  names(spei_data)[1] <- "date" 
+  
+  result <- merge(x, Gamir_Nov21_clima_Feb22 , by= c("date", "date"))
+  result <- merge(result, spei_data , by= c("date", "date"))
+  result <- merge(result, HOBO_gamir , by= c("date", "date"))
+  
+  return(result)
+}) ###uno ya el TRW acumualdo, con las variables climaticas
+
+
+###creo las fechas anteriores de este incremento para hacer el los 30 dias antes del inicio de crecimiento
+fecha_anterior <-  data.frame("date"= seq.Date(from = as.Date("2021-01-19"), to= as.Date("2021-03-18"), by= "day"))
+Gamir_Nov21_Feb22_clima <- Gamir_Nov21_Feb22_Temp[,!names(Gamir_Nov21_Feb22_Temp) %in% c("PET")]
+  spei_data <- spei_data[,!names(spei_data) %in% c("sing")]
+  names(spei_data)[1] <- "date" 
+fecha_anterior <- merge(fecha_anterior, Gamir_Nov21_Feb22_clima , by= c("date", "date"))
+fecha_anterior <- merge(fecha_anterior, spei_data , by= c("date", "date"))
+fecha_anterior <- merge(fecha_anterior, HOBO_gamir , by= c("date", "date"), all.x = TRUE)
+
+fecha_anterior$TRW_dayly <- 0
+fecha_anterior$TRW_acum <- 0
+
+df_TRW_clima <- lapply(df_TRW_clima, function(x){
+  df <- rbind(fecha_anterior, x)
+  return(df)}) ###le añado el clima anterior
+
+
+df_lag5 <- lapply(df_TRW_clima, function(x){
+  TRW_acum <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_acum"] ##con esto hago el acumulado desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+  TRW_dayly <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_dayly"]
+  date <-  x[seq(from= 60, to =nrow(x) , by = 1), "date"]##con esto hago el cojo las fechas extradias desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+   fechas <- c("date" = seq.Date(from = as.Date("2021-03-15"), to= as.Date("2022-02-08"), by= "day"))
+   fechas <- x[x$date %in% fechas ,]
+   prp <- fechas$prp
+   temp_min <- fechas$Tmin
+   temp_max <- fechas$Tmax
+   spei <- fechas$spei
+   VPD <- fechas$VPD
+
+   prp_lag5 <- sum_every_n(prp,5)
+   Tmin_lag5 <- mean_every_n(temp_min,5)
+   Tmax_lag5 <- mean_every_n(temp_max,5)
+   spei_lag5 <- mean_every_n(spei,5)
+   VPD_lag5 <- mean_every_n(VPD,5)
+
+  resultado <- data.frame("date" =date  ,"TRW_acum" =TRW_acum, "TRW_dayly" =TRW_dayly, "prp_Acum" = prp_lag5, "Tmin_mean" = Tmin_lag5,
+                          "Tmax_mean"=Tmax_lag5, "spei_mean"=spei_lag5, "VPD"=VPD_lag5 )
+  return(resultado)
+}) ##funcion nueva, creo que es la mas indicada
+
+df_lag10 <- lapply(df_TRW_clima, function(x){
+  TRW_acum <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_acum"] ##con esto hago el acumulado desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+  date <-  x[seq(from= 60, to =nrow(x) , by = 1), "date"]##con esto hago el cojo las fechas extradias desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+  TRW_dayly <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_dayly"]
+   fechas <- c("date" = seq.Date(from = as.Date("2021-03-10"), to= as.Date("2022-02-08"), by= "day"))
+   fechas <- x[x$date %in% fechas ,]
+   prp <- fechas$prp
+   temp_min <- fechas$Tmin
+   temp_max <- fechas$Tmax
+   spei <- fechas$spei
+   VPD <- fechas$VPD
+
+   prp_lag10 <- sum_every_n(prp,10)
+   Tmin_lag10 <- mean_every_n(temp_min,10)
+   Tmax_lag10 <- mean_every_n(temp_max,10)
+   spei_lag10 <- mean_every_n(spei,10)
+   VPD_lag10 <- mean_every_n(VPD,10)
+
+  resultado <- data.frame("date" =date  ,"TRW_acum" =TRW_acum,"TRW_dayly" =TRW_dayly, "prp_Acum" = prp_lag10, "Tmin_mean" = Tmin_lag10,
+                          "Tmax_mean"=Tmax_lag10, "spei_mean"=spei_lag10, "VPD"=VPD_lag10 )
+  return(resultado)
+}) ##funcion nueva, creo que es la mas indicada
+
+df_lag15 <- lapply(df_TRW_clima, function(x){
+  TRW_acum <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_acum"] ##con esto hago el acumulado desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+  TRW_dayly <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_dayly"]
+  date <-  x[seq(from= 60, to =nrow(x) , by = 1), "date"]##con esto hago el cojo las fechas extradias desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+   fechas <- c("date" = seq.Date(from = as.Date("2021-03-05"), to= as.Date("2022-02-08"), by= "day"))
+   fechas <- x[x$date %in% fechas ,]
+   prp <- fechas$prp
+   temp_min <- fechas$Tmin
+   temp_max <- fechas$Tmax
+   spei <- fechas$spei
+   VPD <- fechas$VPD
+
+   prp_lag15 <- sum_every_n(prp,15)
+   Tmin_lag15 <- mean_every_n(temp_min,15)
+   Tmax_lag15 <- mean_every_n(temp_max,15)
+   spei_lag15 <- mean_every_n(spei,15)
+   VPD_lag15 <- mean_every_n(VPD,15)
+
+  resultado <- data.frame("date" =date  ,"TRW_acum" =TRW_acum, "TRW_dayly" =TRW_dayly, "prp_Acum" = prp_lag15, "Tmin_mean" = Tmin_lag15,
+                          "Tmax_mean"=Tmax_lag15, "spei_mean"=spei_lag15, "VPD"=VPD_lag15 )
+  return(resultado)
+}) ##funcion nueva, creo que es la mas indicada
+
+df_lag30 <- lapply(df_TRW_clima, function(x){
+  TRW_acum <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_acum"] ##con esto hago el acumulado desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+  TRW_dayly <-  x[seq(from= 60, to =nrow(x) , by = 1), "TRW_dayly"]
+  date <-  x[seq(from= 60, to =nrow(x) , by = 1), "date"]##con esto hago el cojo las fechas extradias desde el numero de fila 60, que se corresponde con la primera fecha de acumulado
+   fechas <- c("date" = seq.Date(from = as.Date("2021-02-18"), to= as.Date("2022-02-08"), by= "day"))
+   fechas <- x[x$date %in% fechas ,]
+   prp <- fechas$prp
+   temp_min <- fechas$Tmin
+   temp_max <- fechas$Tmax
+   spei <- fechas$spei
+   VPD <- fechas$VPD
+   
+   prp_lag30 <- sum_every_n(prp,30)
+   Tmin_lag30 <- mean_every_n(temp_min,30)
+   Tmax_lag30 <- mean_every_n(temp_max,30)
+   spei_lag30 <- mean_every_n(spei,30)
+   VPD_lag30 <- mean_every_n(VPD,30)
+   
+  resultado <- data.frame("date" =date  ,"TRW_acum" =TRW_acum, "TRW_dayly" = TRW_dayly , "prp_Acum" = prp_lag30, "Tmin_mean" = Tmin_lag30,
+                          "Tmax_mean"=Tmax_lag30, "spei_mean"=spei_lag30, "VPD"=VPD_lag30 )
+  return(resultado)
+}) ##funcion nueva, creo que es la mas indicada
+
+####voy a mirar si son normales las variables para ello hago el test de shapiro para todas las variables
+clima <- df_TRW_clima$Control
+shapiro.test(clima$Tmin) ###no tienen una distribucion normal
+shapiro.test(clima$Tmax) ###no tienen una distribucion normal
+shapiro.test(clima$prp) ###no tienen una distribucion normal
+shapiro.test(clima$spei) ###no tienen una distribucion normal
+
+###por lo tanto tengo que usar r de Spearman para calcular su correlacion
+
+lista_lag <- list("lag5" =df_lag5, "lag10"= df_lag10, "lag15"= df_lag15,"lag30"= df_lag30)
+
+
+
+
+resultados_correlacion_clima <- lapply(lista_lag, function(x){
+  lapply(x, function(y){
+   result_prp <- cor.test(y$TRW_dayly, y$prp_Acum , method = 'spearman', exact= FALSE)
+   result_Tmin <- cor.test(y$TRW_dayly, y$Tmin_mean , method = 'spearman', exact= FALSE )
+   result_Tmax <- cor.test(y$TRW_dayly, y$Tmax_mean , method = 'spearman', exact= FALSE )
+   result_spei <- cor.test(y$TRW_dayly, y$spei_mean , method = 'spearman', exact= FALSE )
+   result_VPD <- cor.test(y$TRW_dayly, y$VPD , method = 'spearman', exact= FALSE )
+   print(result_prp)
+   print(result_Tmin)
+   print( result_Tmax)
+   print(result_spei)
+   print(result_VPD)
+   resultado <- data.frame("prp" =result_prp$estimate, "Tmin" =result_Tmin$estimate, "Tmax"= result_Tmax$estimate, "spei" = result_spei$estimate, "VPD" = result_VPD$estimate)
+   return(resultado)
+   
+   })}) ##spearman exact False ya que hay muchos empates
+
+resultados_correlacion_clima <- lapply(resultados_correlacion_clima, function(x){
+  resultado <- do.call(rbind,Map(data.frame, x) )
+  resultado <- setDT(resultado, keep.rownames = "treatment")[]
+ return(resultado)
+})
+
+nombres <- names(resultados_correlacion_clima)
+x <- 0
+while (x <length(resultados_correlacion_clima)) {
+  x <- x+1
+  resultados_correlacion_clima[[x]]$lag <- nombres[x]
+}
+
+resultados_correlacion_clima <- do.call(rbind,Map(data.frame, resultados_correlacion_clima) )
+resultados_correlacion_clima$trat_lag <- as.factor(paste(resultados_correlacion_clima$treatment, resultados_correlacion_clima$lag, sep = "_"))
+
+
+resultados_correlacion_clima$trat_lag <- fct_relevel(resultados_correlacion_clima$trat_lag,  "Control_lag5", "Control_lag10",  "Control_lag15",  "Control_lag30","Sequía_lag5", "Sequía_lag10","Sequía_lag15",  "Sequía_lag30" )
+
+resultados_correlacion_clima$lag <- fct_relevel(resultados_correlacion_clima$lag,  "lag5","lag10", "lag15", "lag30" )
+
+
+resultados_correlacion_clima_plot <- pivot_longer(resultados_correlacion_clima, cols=c("prp", "Tmin", "Tmax", "spei", "VPD"),
+                    names_to='variable',
+                    values_to='values')
+resultados_correlacion_clima_plot$trat_lag <- as.factor(paste(resultados_correlacion_clima_plot$variable, resultados_correlacion_clima_plot$trat_lag, sep = "_"))
+
+resultados_correlacion_clima_plot$trat_lag <- fct_relevel(resultados_correlacion_clima_plot$trat_lag,  "prp_Control_lag5","prp_Control_lag10", "prp_Control_lag15", "prp_Control_lag30", "prp_Sequía_lag5","prp_Sequía_lag10", "prp_Sequía_lag15", "prp_Sequía_lag30", "Tmin_Control_lag5","Tmin_Control_lag10", "Tmin_Control_lag15", "Tmin_Control_lag30", "Tmin_Sequía_lag5","Tmin_Sequía_lag10", "Tmin_Sequía_lag15", "Tmin_Sequía_lag30", "Tmax_Control_lag5", "Tmax_Control_lag10", "Tmax_Control_lag15", "Tmax_Control_lag30", "Tmax_Sequía_lag5", "Tmax_Sequía_lag10", "Tmax_Sequía_lag15", "Tmax_Sequía_lag30", "spei_Control_lag5", "spei_Control_lag10", "spei_Control_lag15", "spei_Control_lag30", "spei_Sequía_lag5", "spei_Sequía_lag10", "spei_Sequía_lag15", "spei_Sequía_lag30","VPD_Control_lag5","VPD_Control_lag10","VPD_Control_lag15","VPD_Control_lag30", "VPD_Sequía_lag5","VPD_Sequía_lag10","VPD_Sequía_lag15","VPD_Sequía_lag30", )
+
+ggplot(resultados_correlacion_clima_plot, aes(x=as.factor(trat_lag), y= values))+
+  geom_bar(aes(fill=lag), stat="identity")+
+  scale_y_continuous(breaks = c(-0.5,-0.25,0,0.25,0.5), expand = c(-0.5,0.5))+
+  scale_fill_manual(values=c("#008B45","#00FF7F","#5CACEE","slateblue3"))+
+  geom_hline(yintercept = c(-0.16,0.16), color="black", linetype= 2 )+
+  geom_hline(yintercept = 0, color="black", linetype= 1 )+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text = element_text(color = "black",size = 12),
+        axis.ticks.length  = unit(0.25, "cm"))+
+  scale_x_discrete(labels = c(" "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," "  ))
+
+df_TRW_clima_xplot <- do.call(rbind, Map(data.frame, df_TRW_clima))
+df_TRW_clima_xplot <- setDT(df_TRW_clima_xplot, keep.rownames = "treatment")
+df_TRW_clima_xplot$treatment <- ifelse(grepl( "Sequía", df_TRW_clima_xplot$treatment), "drought", "control" )
+
+
+ggplot(df_TRW_clima_xplot, aes(x=date, y= TRW_dayly))+ geom_line(lwd=1)+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"))+
+  facet_grid(. ~ treatment)+
+  scale_x_date(date_breaks = "1 month" ,date_labels = "%m")
+  
+##empiezo poniendole una nueva columna de estaciones
+lista_lag <- lapply(lista_lag, function(x){
+  nombres <- names(x)
+  z <- 0
+  while (z <length(x)) {
+  z <- z+1
+  x[[z]]$treatment <- nombres[z]
+}
+  resultado <- do.call(rbind,Map(data.frame, x) )
+ return(resultado)
+})
+
+nombres <- names(lista_lag)
+x <- 0
+while (x <length(lista_lag)) {
+  x <- x+1
+  lista_lag[[x]]$lag <- nombres[x]
+}
+rm(x)
+lista_lag <- do.call(rbind,Map(data.frame, lista_lag) )
+
+seasons <- c("01" = "Winter", "02" = "Winter","03" = "Spring", "04" = "Spring", "05" = "Spring","06" = "Summer", "07" = "Summer", "08" = "Summer","09" = "Fall", "10" = "Fall", "11" = "Fall","12" = "Winter")
+seasons <-seasons[format(lista_lag$date, "%m")]
+lista_lag$season <- seasons
+
+###separo el data frame dependiendo de la estacion
+seasons <- split(lista_lag, lista_lag$season)
+
+
+###empiezo a hacer el analisis con las estaciones
+
+season_climate <- lapply(seasons, function(x){
+  season <- split(x, x$lag)
+  season <- lapply(season, function(z){split(z, z$treatment)  } )
+  season_correlacion_clima <- lapply(season, function(x){
+  lapply(x, function(y){
+   result_prp <- cor.test(y$TRW_dayly, y$prp_Acum , method = 'spearman', exact= FALSE )
+   result_Tmin <- cor.test(y$TRW_dayly, y$Tmin_mean , method = 'spearman', exact= FALSE )
+   result_Tmax <- cor.test(y$TRW_dayly, y$Tmax_mean , method = 'spearman', exact= FALSE )
+   result_spei <- cor.test(y$TRW_dayly, y$spei_mean , method = 'spearman', exact= FALSE )
+   result_VPD <- cor.test(y$TRW_dayly, y$VPD , method = 'spearman', exact= FALSE )
+   print(result_prp)
+   print(result_Tmin)
+   print( result_Tmax)
+   print(result_spei)
+   print(result_VPD)
+   
+   resultado <- data.frame("prp" =result_prp$estimate, "Tmin" =result_Tmin$estimate, "Tmax"= result_Tmax$estimate, "spei" = result_spei$estimate, "VPD" = result_VPD$estimate)
+   return(resultado)
+   
+   })}) ##kendall ?¿
+
+season_correlacion_clima <- lapply(season_correlacion_clima, function(x){
+  resultado <- do.call(rbind,Map(data.frame, x) )
+  resultado <- setDT(resultado, keep.rownames = "treatment")[]
+ return(resultado)
+})
+
+nombres <- names(season_correlacion_clima)
+x <- 0
+while (x <length(season_correlacion_clima)) {
+  x <- x+1
+  season_correlacion_clima[[x]]$lag <- nombres[x]
+}
+
+season_correlacion_clima <- do.call(rbind,Map(data.frame, season_correlacion_clima) )
+return(season_correlacion_clima)
+
+}) ##aqui uno todo el codigo mediante listas
+
+season_climate_plots <- lapply(season_climate, function(x){
+  x$trat_lag <- as.factor(paste(x$treatment, x$lag, sep = "_"))
+
+x$lag <- fct_relevel(x$lag,  "lag5","lag10", "lag15", "lag30" )
+
+
+season_climate_plots <- pivot_longer(x, cols=c("prp", "Tmin", "Tmax", "spei", "VPD"),
+                    names_to='variable',
+                    values_to='values')
+season_climate_plots$trat_lag <- as.factor(paste(season_climate_plots$variable, season_climate_plots$trat_lag, sep = "_"))
+
+season_climate_plots$trat_lag <- fct_relevel(season_climate_plots$trat_lag,  "prp_Control_lag5","prp_Control_lag10", "prp_Control_lag15", "prp_Control_lag30", "prp_Sequía_lag5","prp_Sequía_lag10", "prp_Sequía_lag15", "prp_Sequía_lag30", "Tmin_Control_lag5","Tmin_Control_lag10", "Tmin_Control_lag15", "Tmin_Control_lag30", "Tmin_Sequía_lag5","Tmin_Sequía_lag10", "Tmin_Sequía_lag15", "Tmin_Sequía_lag30", "Tmax_Control_lag5", "Tmax_Control_lag10", "Tmax_Control_lag15", "Tmax_Control_lag30", "Tmax_Sequía_lag5", "Tmax_Sequía_lag10", "Tmax_Sequía_lag15", "Tmax_Sequía_lag30", "spei_Control_lag5", "spei_Control_lag10", "spei_Control_lag15", "spei_Control_lag30", "spei_Sequía_lag5", "spei_Sequía_lag10", "spei_Sequía_lag15", "spei_Sequía_lag30","VPD_Control_lag5","VPD_Control_lag10","VPD_Control_lag15","VPD_Control_lag30", "VPD_Sequía_lag5","VPD_Sequía_lag10","VPD_Sequía_lag15","VPD_Sequía_lag30", )
+
+ggplot(season_climate_plots, aes(x=as.factor(trat_lag), y= values))+
+  geom_bar(aes(fill=lag), stat="identity")+
+  scale_y_continuous(breaks = c(-1,-0.75,-0.5,-0.25,0,0.25,0.5,0.75,1), limits = c(-1,1.1))+
+  scale_fill_manual(values=c("#008B45","#00FF7F","#5CACEE","slateblue3"))+
+  geom_hline(yintercept = 0, color="black" )+
+  geom_hline(yintercept = c(0.25,-0.25), color="black", linetype=2 )+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text = element_text(color = "black",size = 12),
+        axis.ticks.length  = unit(0.25, "cm"))+
+  scale_x_discrete(labels = c(" "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," ", " "," ","Control"," "," "," ","Drought"," "  ))
+  
+}) 
+
+season_climate_plots$Fall
+season_climate_plots$Spring
+season_climate_plots$Summer
+
+```
