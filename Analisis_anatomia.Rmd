@@ -1,6 +1,6 @@
 ---
 title: "R_analisis"
-author: "Ismael Joaquín Borreguero Vázquez, Jose Luis Daza Baras"
+author: "Ismael Joaquín Borreguero Vázquez"
 date: "`r Sys.Date()`"
 output: html_document
 editor_options: 
@@ -33,7 +33,7 @@ library(plyr)
 library(gamm4)
 library(DHARMa)
 library(MuMIn) ###para seleccionar modelo
-source("C:/Minicores/R_analisis/Analisis_anatomia/Anatomy_function.R") ##en windows
+source("C:/Minicores/R_analisis/Analisis_anatomia/Anatomy_function.R")
 ```
 
 ```{r clima, include=FALSE}
@@ -53,9 +53,9 @@ prp_gamir <- ggplot(group_month, aes(as.Date(date, "%y-%m"), as.numeric(Prcp)))+
   theme(panel.background = element_rect(fill = "white"),
           axis.line.x = element_line(colour="black"),
           axis.line.y = element_line(colour="black"))
-prp_gamir
 
 sum(gamir_Nov2020_Feb2022$Prcp)
+
 #HOBOS
 setwd("C:/Minicores/HOBO/Temperatura")
 
@@ -3810,4 +3810,5 @@ season_climate_plots$Spring
 season_climate_plots$Summer
 
 ```
+
 
