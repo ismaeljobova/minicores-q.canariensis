@@ -144,7 +144,9 @@ temp
 
 ####Humedad suelo
 
-Hum_suelo <- read_csv("C:/Minicores/HOBO/Humedad_suelo/Humedad_suelo_Gamir_Modificado.csv")
+Hum_suelo <- read_delim("C:/Minicores/HOBO/Humedad_suelo/Humedad_suelo_Modificado.csv", delim = ";" )
+Hum_suelo <- split(Hum_suelo, Hum_suelo$Site)
+Hum_suelo <- Hum_suelo$Gamir
 nombre_columnas_fecha <- names(Hum_suelo)  ##cojo los nombres de la humedad de suelo (las fechas)
 nombre_columnas_fecha <- nombre_columnas_fecha[!(nombre_columnas_fecha %in% c("Site", "Plot","Point","Treatment","Depth")) ]#elimino las variables que no contemplo para este plot
 
@@ -152,47 +154,60 @@ Hum_suelo <- reshape2::melt(Hum_suelo, id.vars=c("Site", "Plot","Point","Treatme
                      measure.vars= nombre_columnas_fecha, 
                      value.name="values", 
                      variable.name="date")
-Hum_suelo <- split(Hum_suelo, Hum_suelo$Treatment)
+
+Hum_suelo$site_tr <- paste0(Hum_suelo$Site, "_", Hum_suelo$Treatment)
+ggplot(data= Hum_suelo, aes(x= as.Date(date, format = "%d/%m/%Y"), y= as.numeric(values), color= site_tr))+
+  geom_point()+
+  facet_grid(. ~ Depth)+
+  geom_smooth()+
+  scale_y_continuous(limits = c(0,60))
 
 
-Hum_suelo <- lapply(Hum_suelo, function(x){ values <- aggregate(x["values"], by=c( x["date"], x["Depth"]), mean, na.rm= T)
-error <- aggregate(x["values"], by=c( x["date"], x["Depth"]), se)
-x <- merge(values, error, by= c("date", "date","Depth", "Depth"))
-return(x)})
-
-Hum_suelo$Control$Treatment <- "control"
-Hum_suelo$Drought$Treatment <- "Drought"
-
-Hum_suelo <- rbind(Hum_suelo$Control, Hum_suelo$Drought)
-
-ggplot(data= Hum_suelo, aes(x= as.Date(date), y= values.x, color= Treatment))+
-  geom_line()+
-  facet_grid(. ~ Depth)
-  
-Hum_suelo <- split(Hum_suelo, Hum_suelo$Depth)
-Hum_suelo30 <- Hum_suelo$"30"
+Hum_suelo$date <- as.Date(Hum_suelo$date, format = "%d/%m/%Y")
+Hum_suelo$date1 <- as.numeric(Hum_suelo$date)
+Hum_suelo$values <- as.numeric(Hum_suelo$values)
+Hum_suelo$Depth <- as.factor(Hum_suelo$Depth)
+Hum_suelo$Treatment <- as.factor(Hum_suelo$Treatment)
+Hum_suelo$Depth_point <- paste0(Hum_suelo$Point, "_", Hum_suelo$Depth)
 
 
-plot_Hum_suelo_30 <-  ggplot(data =Hum_suelo30, aes(x= as.Date(date, "%d/%m/%y"),y=values.x, color= Treatment ) )+
-  geom_line(lwd=0.9, show.legend = F )+
-  scale_x_date(date_breaks = "1 month" ,date_labels = " ")+
+Hum_suelo[duplicated(Hum_suelo[, c("Plot", "Point", "date1")]), ]
+
+modelo_humedad <- gamm4(values ~ Treatment * Depth + s(date1, k = 10),
+     random = ~(1|Plot/Point),
+     data = Hum_suelo)
+
+###duda si es el random Point o el Point_depth
+
+
+summary(modelo_humedad$gam)
+
+residuos <- residuals(modelo_humedad$mer)
+qqnorm(residuos)
+qqline(residuos)
+hist(residuos) ###son normales
+###preguntar heterosasticidad
+
+predict <- get_predictions(modelo_humedad$gam, 
+                       cond = list( Depth = rep( unique(Hum_suelo$Depth), length(unique(Hum_suelo$date1))),
+                                    date1= rep(unique(Hum_suelo$date1), each=8),
+                                    Treatment= rep(unique(Hum_suelo$Treatment), each=4),
+                                    Plot = 1,
+                                    Point = 1, se= T))
+
+
+predict <- unique(predict)
+
+ggplot()+
+  geom_point(data = Hum_suelo, aes(x= as.Date(Hum_suelo$date1), y= as.numeric(values), colour= Treatment), alpha= 0.1)+
+  geom_line(data= predict, aes(x= as.Date(predict$date1), y= predict$fit, colour = predict$Treatment), lwd=0.9, show.legend = F)+
+  facet_grid(. ~ Depth)+
   theme(panel.background = element_rect(fill = "white"),
           axis.line.x = element_line(colour="black"),
           axis.line.y = element_line(colour="black"))+
   scale_color_manual(values=c("#0000FF",'#CD3333'))+
-  geom_ribbon(alpha=.3,mapping = aes(x=as.Date(date, "%d/%m/%y"), ymin= values.x-values.y, ymax= values.x+values.y, fill=Treatment),colour= NA, show.legend = F)+
-  scale_fill_manual(values=c("#00EEEE",'#FF4040'))+
-  ylab("soil moisture (%)")+
-  xlab(" ")
-
-plot_Hum_suelo_30
-# plot_Hum_suelo_drought <- ggplot(data =Hum_suelo_drought, aes(x= as.Date(date, "%d/%m/%y"),y=mean_hum, color= as.factor(Depth) ) )+
-#   geom_line(lwd=0.9 )+
-#   scale_x_date(date_breaks = "1 month" ,date_labels = "%B")+
-#   theme(panel.background = element_rect(fill = "white"),
-#           axis.line.x = element_line(colour="black"),
-#           axis.line.y = element_line(colour="black"))+
-#   scale_color_manual(values=c('#FF4040', 'bisque3', '#C1CDCD', "aquamarine2"))
+  geom_ribbon(data= predict, alpha=.3, mapping = aes(x=as.Date(predict$date1), ymin= predict$fit-predict$CI, ymax= predict$fit +predict$CI, fill=predict$Treatment),colour= NA, show.legend = F)+
+  scale_fill_manual(values=c("#00EEEE",'#FF4040'))
 
 
 
@@ -225,13 +240,6 @@ SPEI_plot <- ggplot(spei_data, aes(x = time, y = spei, col = sing, fill = sing))
 ##VPD
 
 
-
-
-
-
-
-
-
 HOBO_gamir <- HOBO_gamir[HOBO_gamir$date >= as.Date("2020-11-01") & HOBO_gamir$date <= as.Date("2022-02-28"),]
 
 dayly_prp_gamir  <- ggplot()+
@@ -256,7 +264,7 @@ plot_grid(temp,dayly_prp_gamir,plot_Hum_suelo_30,SPEI_plot, ncol = 1)
 ```
 
 ```{r Phenology canariensis_EW, include=FALSE}
-setwd("C:/Minicores/R_analisis")
+setwd("C:/Minicores/R_analisis") ##es el Working directory de la mayoria de los archivos. 
 Qca_phenology <- read_excel_allsheets("Datos_Modificados_Qca.xlsx")
 Qca_phenology <- Qca_phenology[ names(Qca_phenology) != "ray_area"]
 Qca_phenology <- eliminar_filas_NA_lista(Qca_phenology, "N_vasos")
@@ -3810,5 +3818,6 @@ season_climate_plots$Spring
 season_climate_plots$Summer
 
 ```
+
 
 
