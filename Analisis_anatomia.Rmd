@@ -26,102 +26,933 @@ library(sjPlot)
 library(lmerTest)
 library(visreg)
 library(car)
-library(SPEI
+library(SPEI)
+library(lmtest)
 library(multcompView)
 library(cowplot)
+library(merTools)
 library(plyr)
 library(gamm4)
 library(DHARMa)
 library(MuMIn) ###para seleccionar modelo
-source("C:/Minicores/R_analisis/Analisis_anatomia/Anatomy_function.R")
+source("C:/Minicores/R_analisis/Analisis_anatomia/Anatomy_function.R") ##en windows
 ```
 
-```{r clima, include=FALSE}
-gamir_prp <- read_csv("C:/Minicores/HOBO/precipitaciones/Gamirprcp2019-2022.csv")
-gamir_prp$date <- as.Date(gamir_prp$date)
-gamir_Nov2020_Feb2022<- gamir_prp[gamir_prp$date >= as.Date("2020-11-01") & gamir_prp$date <= as.Date("2022-02-28"),]
-gamir_Nov2020_Feb2022 <- gamir_Nov2020_Feb2022[names(gamir_Nov2020_Feb2022) %in% c("date","Prcp")]
+```{r datos, include=FALSE}
+###clima
+clima <- list()
 
-gamir_Nov2020_Feb2022$year_month <- format(gamir_Nov2020_Feb2022$date, "%Y-%m")
+clima$prp <- read_csv("C:/Minicores/HOBO/precipitaciones/Gamirprcp2019-2022.csv")
 
-group_month <- aggregate(Prcp ~ year_month, data = gamir_Nov2020_Feb2022, sum)
-group_month$date <- as.Date(paste(group_month$year_month,'-01',sep = "")) 
-
-prp_gamir <- ggplot(group_month, aes(as.Date(date, "%y-%m"), as.numeric(Prcp)))+
-  geom_bar(stat = "identity",
-           show.legend = FALSE,position = "dodge", fill= "#00BFFF")+
-  theme(panel.background = element_rect(fill = "white"),
-          axis.line.x = element_line(colour="black"),
-          axis.line.y = element_line(colour="black"))
-
-sum(gamir_Nov2020_Feb2022$Prcp)
-
-#HOBOS
 setwd("C:/Minicores/HOBO/Temperatura")
-
 Temp_gamir_Nov20_Feb21 <- read_excel("Gamir_Nov20_Feb21.xlsx")
 Temp_gamir_Feb21_Jun21 <- read_excel("Gamir_Feb21_Jun21.xlsx")
 Temp_gamir_Jun21_May22 <- read_excel("Gamir_Jun21_May22.xlsx")
-
 ###le doy el formato de fecha
 Temp_gamir_Feb21_Jun21$date <- as.Date( Temp_gamir_Feb21_Jun21$`Fecha/hora (CET)`, "%m/%d/%y")
 Temp_gamir_Jun21_May22$date <- as.Date( Temp_gamir_Jun21_May22$`Fecha/hora (CET)`, "%y/%m/%d")
-
-
 ###me quedo con la humedad relativa y la temperatura
 Temp_gamir_Feb21_May22 <- rbind(Temp_gamir_Feb21_Jun21,Temp_gamir_Jun21_May22)  
-
 Temp_gamir_Feb21_May22 <- Temp_gamir_Feb21_May22[names(Temp_gamir_Feb21_May22) %in% c("date" ,"Temperatura_(C)", "Humedad_relativa")]
 
-##calculo el SPD y el AVP
-Temp_gamir_Feb21_May22$SVP <- 0.6108 * exp((17.27 * Temp_gamir_Feb21_May22$`Temperatura_(C)`) / (Temp_gamir_Feb21_May22$`Temperatura_(C)` + 237.3))
-Temp_gamir_Feb21_May22$AVP <-  Temp_gamir_Feb21_May22$SVP * (Temp_gamir_Feb21_May22$Humedad_relativa / 100)
-Temp_gamir_Feb21_May22$VPD <-  Temp_gamir_Feb21_May22$SVP - Temp_gamir_Feb21_May22$AVP
-
-##hago la media diaria de los valores de temperatura, humedad, maximo y minimo de temperatura diaria
-dayly <- split(Temp_gamir_Feb21_May22, Temp_gamir_Feb21_May22$date)
-dayly <- lapply(dayly, function(x){
-  df <-  data.frame("Tmean" = mean(x$`Temperatura_(C)`), "Tmin" = min(x$`Temperatura_(C)`), "Tmax" = max(x$`Temperatura_(C)`), "VPD" = mean(x$VPD) )
-})
-x <- 0
-while(x < length(dayly)){
-  x <- x +1
-  dayly[[x]]$date <- names(dayly[x])
-}
-rm(x)
-Gamir <- do.call(rbind, Map(data.frame,dayly ) )
-
-Gamir$date <- as.Date(Gamir$date)
-
-HOBO_gamir <- data.frame("date" = Gamir$date, "VPD" = Gamir$VPD)
-Gamir$VPD <- NULL 
-##ahora le añado la temperatura desde noviembre
+####le hago la media de temperatura al df Temp_gamir_Feb21_Jun21
 Temp_gamir_Nov20_Feb21$Tmean <- rowMeans(Temp_gamir_Nov20_Feb21[, c("Tmin","Tmax")] , na.rm = T)
 Temp_gamir_Nov20_Feb21$date <- as.Date(Temp_gamir_Nov20_Feb21$date)
 
-Gamir <- rbind(Temp_gamir_Nov20_Feb21,Gamir)
+
+clima$temp <- Temp_gamir_Feb21_May22
+clima$temp_Feb21  <- Temp_gamir_Nov20_Feb21
+
+#Humedad suelo
+clima$Hum <- read_delim("C:/Minicores/HOBO/Humedad_suelo/Humedad_suelo_Modificado.csv", delim = ";" )
+
+
+rm(Temp_gamir_Nov20_Feb21, Temp_gamir_Feb21_Jun21, Temp_gamir_Jun21_May22, Temp_gamir_Feb21_May22 )
+
+###EW/LW/TRW/Area
+Minicore_fielddata <- list()
+setwd("C:/Minicores/R_analisis")
+Minicore_fielddata$Minicore_TRW <- read_excel_allsheets("Datos_Modificados_Qca.xlsx")
+Minicore_fielddata$Datos_pie <- read_ods("Datos_Pie.ods")
+Minicore_fielddata$Datos_pie <- split(Minicore_fielddata$Datos_pie, Minicore_fielddata$Datos_pie$Especie)
+Minicore_fielddata$Datos_pie <- Minicore_fielddata$Datos_pie$QUCA
+
+
+```
+
+```{r datos para Github, include=FALSE}
+Minicore_fielddata <- list(Minicore_TRW = list(`2Feb21` = structure(list(Finca = c("Gamir", 
+"Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+"Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+"Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+"Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+"Gamir"), Plot = c(1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 
+3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6), Tratam = c("Control", 
+"Control", "Control", "Control", "Control", "Control", "Control", 
+"Control", "Control", "Control", "Control", "Control", "Sequía", 
+"Sequía", "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", 
+"Sequía", "Control", "Control", "Control", "Control", "Control", 
+"Control", "Sequía", "Sequía", "Sequía", "Sequía"), indv = c(1, 
+2, 3, 5, 6, 7, 8, 9, 10, 11, 13, 14, 17, 18, 19, 20, 23, 26, 
+30, 31, 36, 37, 38, 40, 43, 44, 47, 51, 52, 55), Especie = c("QUSU", 
+"QUCA", "QUCA", "QUCA", "QUSU", "QUSU", "QUCA", "QUCA", "QUCA", 
+"QUSU", "QUSU", "QUSU", "QUSU", "QUCA", "QUCA", "QUSU", "QUSU", 
+"QUCA", "QUCA", "QUSU", "QUCA", "QUSU", "QUSU", "QUCA", "QUSU", 
+"QUCA", "QUCA", "QUSU", "QUCA", "QUSU"), Codigo = c(NA, "2QcC4F21", 
+"3QcC_4F21", "5QcC4F21", NA, NA, "8QcC4F21", "9QcC4F21", "10QcC4F21", 
+NA, NA, NA, NA, "18QcS4F21", "19QcS4F21", NA, NA, "26QcS4F21", 
+"30QcS4F21", NA, "36QcC4F21", NA, NA, "40QcC4F21", NA, "44QcC4F21", 
+"47QcS4F21", NA, "52QcS4F21", NA), N_anillos = c(NA, 6, 6, 6, 
+NA, NA, 6, 7, 16, NA, NA, NA, NA, 11, 5, NA, NA, 10, 6, NA, 25, 
+NA, NA, 8, NA, 6, 2, NA, 19, NA), N_vasos = c(NA, 42, 49, 64, 
+NA, NA, 19, 58, 19, NA, NA, NA, NA, 36, 72, NA, NA, 35, 58, NA, 
+NA, NA, NA, 36, NA, 34, 44, NA, 45, NA), Feret = c(NA, NA, NA, 
+NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
+NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA), `TRW (mm) arriba` = c(NA, 
+2.34, 2.62, 1.44, NA, NA, 0.4, 0.77, 0.6, NA, NA, NA, NA, 1.65, 
+2.53, NA, NA, 0.84, 2.41, NA, NA, NA, NA, 1.71, NA, 0.65, 4.79, 
+NA, 1.9, NA), `TRW (mm) centro` = c(NA, 2.057, 2.58, 1.42, NA, 
+NA, 0.41, 0.8, 0.65, NA, NA, NA, NA, 1.7, 2.72, NA, NA, 0.87, 
+2.55, NA, NA, NA, NA, 1.75, NA, 0.75, 4.73, NA, 1.77, NA), `TRW (mm) Abajo` = c(NA, 
+1.979, 2.51, 1.49, NA, NA, 0.36, 0.75, 0.64, NA, NA, NA, NA, 
+1.62, 2.69, NA, NA, 0.9, 2.62, NA, NA, NA, NA, 1.78, NA, 0.81, 
+4.9, NA, 1.85, NA), Area = c(NA, 1.71, 2.76, 1.79, NA, NA, 0.59, 
+0.65, 0.59, NA, NA, NA, NA, 1.95, 3.56, NA, NA, 1.3, 2.65, NA, 
+NA, NA, NA, 1.7, NA, 0.99, 5.42, NA, 1.84, NA), Inicio_EW = c(NA, 
+"NO", "NO", "NO", NA, NA, "NO", "NO", "NO", NA, NA, NA, NA, "NO", 
+"NO", NA, NA, "NO", "NO", NA, "NO", NA, NA, "NO", NA, "NO", "NO", 
+NA, "NO", NA)), row.names = c(NA, -30L), class = "data.frame"), 
+    `18Marz2021` = structure(list(Finca = c("Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir"), Plot = c(1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 
+    3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6), Tratam = c("Control", 
+    "Control", "Control", "Control", "Control", "Control", "Control", 
+    "Control", "Control", "Control", "Control", "Control", "Sequía", 
+    "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", 
+    "Sequía", "Control", "Control", "Control", "Control", "Control", 
+    "Control", "Sequía", "Sequía", "Sequía", "Sequía", "Sequía"
+    ), indv = c(1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 13, 14, 17, 18, 
+    19, 20, 23, 26, 30, 31, 36, 37, 38, 40, 43, 44, 47, 51, 52, 
+    55, 60), Especie = c("QUSU", "QUCA", "QUCA", "QUCA", "QUSU", 
+    "QUSU", "QUCA", "QUCA", "QUCA", "QUSU", "QUSU", "QUSU", "QUSU", 
+    "QUCA", "QUCA", "QUSU", "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", 
+    "QUSU", "QUSU", "QUCA", "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", 
+    "QUSU", "QUCA"), Codigo = c(NA, "2QcC18M21", "3QcC_18M21", 
+    "5QcC18M21", NA, NA, "8QcC18M21", "9QcC18M21", "10QcC18M21", 
+    NA, NA, NA, NA, "18QcS18M21", "19QcS18M21", NA, NA, "26QcS18M21", 
+    "30QcS18M21", NA, "36QcC18M21", NA, NA, "40QcC18M21", NA, 
+    "44QcC18M21", "47QcS18M21", NA, "52QcS18M21", NA, "52QcS18M21"
+    ), N_vasos = c(NA, 0, 2, 0, NA, NA, 0, 0, 0, NA, NA, NA, 
+    NA, 0, 0, NA, NA, 0, 0, NA, 0, NA, NA, 0, NA, NA, 0, NA, 
+    0, NA, 0), `TRW (mm) arriba` = c(NA, 0, 0.25, 0, NA, NA, 
+    0, 0, 0, NA, NA, NA, NA, 0, 0, NA, NA, 0, 0, NA, 0, NA, NA, 
+    0, NA, NA, 0, NA, 0, NA, 0), `TRW (mm) centro` = c(NA, 0, 
+    0.27, 0, NA, NA, 0, 0, 0, NA, NA, NA, NA, 0, 0, NA, NA, 0, 
+    0, NA, 0, NA, NA, 0, NA, NA, 0, NA, 0, NA, 0), `TRW (mm) Abajo` = c(NA, 
+    0, 0.09, 0, NA, NA, 0, 0, 0, NA, NA, NA, NA, 0, 0, NA, NA, 
+    0, 0, NA, 0, NA, NA, 0, NA, NA, 0, NA, 0, NA, 0), Area = c(NA, 
+    0, 0.09, 0, NA, NA, 0, 0, 0, NA, NA, NA, NA, 0, 0, NA, NA, 
+    0, 0, NA, 0, NA, NA, 0, NA, NA, 0, NA, 0, NA, 0), Inicio_EW = c(NA, 
+    "NO", "SI", "NO", NA, NA, "NO", "NO", "NO", NA, NA, NA, NA, 
+    "NO", "NO", NA, NA, "NO", "NO", NA, "NO", NA, NA, "NO", NA, 
+    NA, "SI", NA, "NO", NA, "NO")), row.names = c(NA, -31L), class = "data.frame"), 
+    `1Abr2021` = structure(list(Finca = c("Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir"), Plot = c(1, 
+    1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 
+    5, 5, 5, 5, 5, 5, 6, 6, 6, 6), Tratam = c("Control", "Control", 
+    "Control", "Control", "Control", "Control", "Control", "Control", 
+    "Control", "Control", "Control", "Control", "Sequía", "Sequía", 
+    "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", 
+    "Control", "Control", "Control", "Control", "Control", "Control", 
+    "Sequía", "Sequía", "Sequía", "Sequía"), indv = c(1, 
+    2, 3, 5, 6, 7, 8, 9, 10, 11, 13, 14, 17, 18, 19, 20, 23, 
+    26, 30, 31, 36, 37, 38, 40, 43, 44, 47, 51, 52, 55), Especie = c("QUSU", 
+    "QUCA", "QUCA", "QUCA", "QUSU", "QUSU", "QUCA", "QUCA", "QUCA", 
+    "QUSU", "QUSU", "QUSU", "QUSU", "QUCA", "QUCA", "QUSU", "QUSU", 
+    "QUCA", "QUCA", "QUSU", "QUCA", "QUSU", "QUSU", "QUCA", "QUSU", 
+    "QUCA", "QUCA", "QUSU", "QUCA", "QUSU"), Codigo = c(NA, "2QcC_1A21", 
+    "3QcC_1A21", "5QcC1A21", NA, NA, "8QcC1A21", "9QcC1A21", 
+    "10QcC1A21", NA, NA, NA, NA, "18QcS1A21", "19QcS1A21", NA, 
+    NA, "26QcS1A21", "30QcS1A21", NA, "36QcC1A21", NA, NA, "40QcC1A21", 
+    NA, "44QcC1A21", "47QcS1A21", NA, "52QcS1A21", NA), N_vasos = c(NA, 
+    0, 3, 1, NA, NA, 1, 1, 0, NA, NA, NA, NA, 3, 2, NA, NA, 2, 
+    0, NA, 0, NA, NA, 0, NA, 0, 3, NA, 0, NA), `TRW (mm) arriba` = c(NA, 
+    0, 0.46, 0.13, NA, NA, 0.06, 0.1, 0, NA, NA, NA, NA, 0.2, 
+    0.25, NA, NA, 0.18, 0, NA, 0, NA, NA, 0, NA, 0, 0.35, NA, 
+    0, NA), `TRW (mm) centro` = c(NA, 0, 0.44, 0.22, NA, NA, 
+    0.09, 0.16, 0, NA, NA, NA, NA, 0.25, 0.15, NA, NA, 0.18, 
+    0, NA, 0, NA, NA, 0, NA, 0, 0.35, NA, 0, NA), `TRW (mm) Abajo` = c(NA, 
+    0, 0.44, 0.36, NA, NA, 0.07, 0.36, 0, NA, NA, NA, NA, 0.27, 
+    0.19, NA, NA, 0.21, 0, NA, 0, NA, NA, 0, NA, 0, 0.31, NA, 
+    0, NA), Area = c(NA, 0, 0.47, 0.18, NA, NA, 0.07, 0.17, 0, 
+    NA, NA, NA, NA, 0.29, 0.18, NA, NA, 0.29, 0, NA, 0, NA, NA, 
+    0, NA, 0, 0.3, NA, 0, NA), Inicio_EW = c(NA, "NO", "SI", 
+    "SI", NA, NA, "SI", "SI", "NO", NA, NA, NA, NA, "SI", "SI", 
+    NA, NA, "SI", "NO", NA, "NO", NA, NA, "NO", NA, "NO", "SI", 
+    NA, "SI", NA), Completa_EW = c(NA, "NO", "NO", "NO", NA, 
+    NA, "NO", "NO", "NO", NA, NA, NA, NA, "SI", "SI", NA, NA, 
+    "NO", "NO", NA, "NO", NA, NA, "NO", NA, "NO", "SI", NA, "NO", 
+    NA), Inicio_LW = c(NA, "NO", "NO", "NO", NA, NA, "NO", "NO", 
+    "NO", NA, NA, NA, NA, "NO", "NO", NA, NA, "NO", "NO", NA, 
+    "NO", NA, NA, "NO", NA, "NO", "NO", NA, "NO", NA), Feret = c(NA, 
+    NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
+    NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA)), row.names = c(NA, 
+    -30L), class = "data.frame"), `15Abr2021` = structure(list(
+        Finca = c("N_vasos", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir"), Plot = c(1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 
+        3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6), 
+        Tratam = c("Control", "Control", "Control", "Control", 
+        "Control", "Control", "Control", "Control", "Control", 
+        "Control", "Control", "Control", "Sequía", "Sequía", 
+        "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", 
+        "Sequía", "Control", "Control", "Control", "Control", 
+        "Control", "Control", "Sequía", "Sequía", "Sequía", 
+        "Sequía"), indv = c(1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 
+        13, 14, 17, 18, 19, 20, 23, 26, 30, 31, 36, 37, 38, 40, 
+        43, 44, 47, 51, 52, 55), Especie = c("QUSU", "QUCA", 
+        "QUCA", "QUCA", "QUSU", "QUSU", "QUCA", "QUCA", "QUCA", 
+        "QUSU", "QUSU", "QUSU", "QUSU", "QUCA", "QUCA", "QUSU", 
+        "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", "QUSU", "QUSU", 
+        "QUCA", "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", "QUSU"
+        ), Codigo = c(NA, "2QcC15A21", "3QcC_15A21", "5QcC15A21", 
+        NA, NA, "8QcC15A21", "9QcC15A21", "10QcC15A21", NA, NA, 
+        NA, NA, "18QcS15A21", "19QcS15A21", NA, NA, "26QcS15A21", 
+        "30QcS15A21", NA, "36QcC15A21", NA, NA, "40QcC15A21", 
+        NA, NA, "47QcS15A21", NA, "52QcS15A21", NA), N_vasos = c(NA, 
+        0, 0, 0, NA, NA, 5, 3, 3, NA, NA, NA, NA, 2, 3, NA, NA, 
+        2, 0, NA, 3, NA, NA, 0, NA, NA, 4, NA, 7, NA), `TRW (mm) arriba` = c(NA, 
+        0.29, 0.26, NA, NA, NA, 0.32, 0.26, 0.21, NA, NA, NA, 
+        NA, 0.28, 0.21, NA, NA, 0.32, 0.14, NA, 0.13, NA, NA, 
+        0.11, NA, NA, 0.38, NA, 0.19, NA), `TRW (mm) centro` = c(NA, 
+        0.31, 0.42, NA, NA, NA, 0.27, 0.34, 0.32, NA, NA, NA, 
+        NA, 0.28, 0.34, NA, NA, 0.18, 0.39, NA, 0.1, NA, NA, 
+        0.19, NA, NA, 0.35, NA, 0.15, NA), `TRW (mm) Abajo` = c(NA, 
+        0.34, 0.32, NA, NA, NA, 0.49, 0.31, 0.14, NA, NA, NA, 
+        NA, 0.35, 0.25, NA, NA, 0.25, 0.36, NA, 0.07, NA, NA, 
+        0.22, NA, NA, 0.34, NA, 0.17, NA), Area = c(NA, 0.34, 
+        0.36, NA, NA, NA, 0.38, 0.24, 0.21, NA, NA, NA, NA, 0.32, 
+        0.2, NA, NA, 0.18, 0.29, NA, 0.17, NA, NA, 0.15, NA, 
+        NA, 0.39, NA, 0.17, NA), Inicio_EW = c(NA, "SI", "SI", 
+        "SI", NA, NA, "SI", "SI", "SI", NA, NA, NA, NA, "SI", 
+        "SI", NA, NA, "SI", "SI", NA, "SI", NA, NA, "SI", NA, 
+        NA, "SI", NA, "SI", NA), Completa_EW = c(NA, "NO", "NO", 
+        "NO", NA, NA, "NO", "SI", "SI", NA, NA, NA, NA, "SI", 
+        "SI", NA, NA, "NO", "NO", NA, "SI", NA, NA, "NO", NA, 
+        NA, "NO", NA, "SI", NA), Inicio_LW = c(NA, "NO", "NO", 
+        "NO", NA, NA, "NO", "NO", "NO", NA, NA, NA, NA, "NO", 
+        "NO", NA, NA, "NO", "NO", NA, "NO", NA, NA, "NO", NA, 
+        NA, "SI", NA, "NO", NA), Feret = c(NA, "NO", "NO", "NO", 
+        NA, NA, "NO", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
+        NA, "NO", NA, NA, NA, NA, "NO", NA, NA, NA, NA, NA, NA
+        )), row.names = c(NA, -30L), class = "data.frame"), `29Abr21` = structure(list(
+        Finca = c("Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir"), Plot = c(1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 
+        3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6), 
+        Tratam = c("Control", "Control", "Control", "Control", 
+        "Control", "Control", "Control", "Control", "Control", 
+        "Control", "Control", "Control", "Sequía", "Sequía", 
+        "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", 
+        "Sequía", "Control", "Control", "Control", "Control", 
+        "Control", "Control", "Sequía", "Sequía", "Sequía", 
+        "Sequía"), indv = c(1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 
+        13, 14, 17, 18, 19, 20, 23, 26, 30, 31, 36, 37, 38, 40, 
+        43, 44, 47, 51, 52, 55), Especie = c("QUSU", "QUCA", 
+        "QUCA", "QUCA", "QUSU", "QUSU", "QUCA", "QUCA", "QUCA", 
+        "QUSU", "QUSU", "QUSU", "QUSU", "QUCA", "QUCA", "QUSU", 
+        "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", "QUSU", "QUSU", 
+        "QUCA", "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", "QUSU"
+        ), Codigo = c(NA, "2QcC29A21", "3QcC29A21", "5QcC29A21", 
+        NA, NA, "8QcC29A21", "9QcC29A21", "10QcC29A21", NA, NA, 
+        NA, NA, "18QcS29A21", "19QcS29A21", NA, NA, "26QcS29A21", 
+        "30QcS29A21", NA, "36QcC29A21", NA, NA, "40QcC29A21", 
+        NA, "44QcC29A21", "47QcS29A21", NA, "52QcS29A21", NA), 
+        N_vasos = c(NA, 4, 3, 3, NA, NA, 0, 4, 2, NA, NA, NA, 
+        NA, 2, 3, NA, NA, 2, 2, NA, 4, NA, NA, 3, NA, 2, 5, NA, 
+        5, NA), `TRW (mm) arriba` = c(NA, 0.34, 0.34, 0.52, NA, 
+        NA, 0.31, 0.33, 0.18, NA, NA, NA, NA, 0.37, 0.37, NA, 
+        NA, 0.14, 0.37, NA, 0.43, NA, NA, 0.57, NA, 0.29, 0.34, 
+        NA, 0.27, NA), `TRW (mm) centro` = c(NA, 0.27, 0.4, 0.58, 
+        NA, NA, 0.31, 0.24, 0.13, NA, NA, NA, NA, 0.37, 0.32, 
+        NA, NA, 0.43, 0.32, NA, 0.5, NA, NA, 0.27, NA, 0.25, 
+        0.36, NA, 0.22, NA), `TRW (mm) Abajo` = c(NA, 0.24, 0.4, 
+        0.43, NA, NA, 0.38, 0.28, 0.2, NA, NA, NA, NA, 0.25, 
+        0.44, NA, NA, 0.36, 0.19, NA, 0.42, NA, NA, 0.42, NA, 
+        0.21, 0.4, NA, 0.3, NA), Area = c(NA, 0.36, 0.41, 0.47, 
+        NA, NA, 0.35, 0.3, 0.14, NA, NA, NA, NA, 0.41, 0.38, 
+        NA, NA, 0.23, 0.27, NA, 0.32, NA, NA, 0.43, NA, 0.24, 
+        0.35, NA, 0.23, NA), Inicio_EW = c(NA, "SI", "SI", "SI", 
+        NA, NA, "SI", "SI", "SI", NA, NA, NA, NA, "SI", "SI", 
+        NA, NA, "SI", "SI", NA, "SI", NA, NA, "SI", NA, "SI", 
+        "SI", NA, "SI", NA), Completa_EW = c(NA, "SI", "SI", 
+        "SI", NA, NA, "SI", "SI", "SI", NA, NA, NA, NA, "SI", 
+        "SI", NA, NA, "NO", "NO", NA, "SI", NA, NA, "NO", NA, 
+        "NO", "SI", NA, "SI", NA), Inicio_LW = c(NA, "NO", "NO", 
+        "NO", NA, NA, "NO", "NO", "SI", NA, NA, NA, NA, "NO", 
+        "NO", NA, NA, "NO", "NO", NA, "NO", NA, NA, "NO", NA, 
+        "NO", "NO", NA, "NO", NA), Feret = c(NA, NA, NA, NA, 
+        NA, NA, "NO", NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
+        NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA)), row.names = c(NA, 
+    -30L), class = "data.frame"), `13May2021` = structure(list(
+        Finca = c("Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir"), Plot = c(1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 
+        3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6), 
+        Tratam = c("Control", "Control", "Control", "Control", 
+        "Control", "Control", "Control", "Control", "Control", 
+        "Control", "Control", "Control", "Sequía", "Sequía", 
+        "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", 
+        "Sequía", "Control", "Control", "Control", "Control", 
+        "Control", "Control", "Sequía", "Sequía", "Sequía", 
+        "Sequía"), indv = c(1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 
+        13, 14, 17, 18, 19, 20, 23, 26, 30, 31, 36, 37, 38, 40, 
+        43, 44, 47, 51, 52, 55), Especie = c("QUSU", "QUCA", 
+        "QUCA", "QUCA", "QUSU", "QUSU", "QUCA", "QUCA", "QUCA", 
+        "QUSU", "QUSU", "QUSU", "QUSU", "QUCA", "QUCA", "QUSU", 
+        "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", "QUSU", "QUSU", 
+        "QUCA", "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", "QUSU"
+        ), N_vasos = c(NA, 4, 3, 3, NA, NA, NA, 4, 2, NA, NA, 
+        NA, NA, 2, 3, NA, NA, 2, 2, NA, 4, NA, NA, 3, NA, 2, 
+        5, NA, 5, NA), `TRW (mm) arriba` = c(NA, 0.34, 0.34, 
+        0.52, NA, NA, NA, 0.33, 0.18, NA, NA, NA, NA, 0.37, 0.37, 
+        NA, NA, 0.14, 0.37, NA, 0.43, NA, NA, 0.57, NA, 0.29, 
+        0.34, NA, 0.27, NA), `TRW (mm) centro` = c(NA, 0.27, 
+        0.4, 0.58, NA, NA, NA, 0.24, 0.13, NA, NA, NA, NA, 0.37, 
+        0.32, NA, NA, 0.43, 0.32, NA, 0.5, NA, NA, 0.27, NA, 
+        0.25, 0.36, NA, 0.22, NA), `TRW (mm) Abajo` = c(NA, 0.24, 
+        0.4, 0.43, NA, NA, NA, 0.28, 0.2, NA, NA, NA, NA, 0.25, 
+        0.44, NA, NA, 0.36, 0.19, NA, 0.42, NA, NA, 0.42, NA, 
+        0.21, 0.4, NA, 0.3, NA), Area = c(NA, 0.36, 0.41, 0.47, 
+        NA, NA, NA, 0.3, 0.14, NA, NA, NA, NA, 0.41, 0.38, NA, 
+        NA, 0.23, 0.27, NA, 0.32, NA, NA, 0.43, NA, 0.24, 0.35, 
+        NA, 0.23, NA), Inicio_EW = c(NA, "SI", "SI", "SI", NA, 
+        NA, NA, "SI", "SI", NA, NA, NA, NA, "SI", "SI", NA, NA, 
+        "SI", "SI", NA, "SI", NA, NA, "SI", NA, "SI", "SI", NA, 
+        "SI", NA), Completa_EW = c(NA, "SI", "SI", "SI", NA, 
+        NA, NA, "SI", "SI", NA, NA, NA, NA, "SI", "SI", NA, NA, 
+        "SI", "SI", NA, "SI", NA, NA, "Si", NA, "SI", "SI", NA, 
+        "SI", NA), Inicio_LW = c(NA, "NO", "NO", "NO", NA, NA, 
+        NA, "NO", "SI", NA, NA, NA, NA, "NO", "NO", NA, NA, "NO", 
+        "NO", NA, "NO", NA, NA, "NO", NA, "NO", "NO", NA, "NO", 
+        NA), Feret = c(NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
+        NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
+        NA, NA, NA, NA, NA, NA)), row.names = c(NA, -30L), class = "data.frame"), 
+    `27May2021` = structure(list(Finca = c("Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir"
+    ), Plot = c(1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 
+    3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6), Tratam = c("Control", 
+    "Control", "Control", "Control", "Control", "Control", "Control", 
+    "Control", "Control", "Control", "Control", "Control", "Sequía", 
+    "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", 
+    "Sequía", "Control", "Control", "Control", "Control", "Control", 
+    "Control", "Sequía", "Sequía", "Sequía", "Sequía"), indv = c(1, 
+    2, 3, 5, 6, 7, 8, 9, 10, 11, 13, 14, 17, 18, 19, 20, 23, 
+    26, 30, 31, 36, 37, 38, 40, 43, 44, 47, 51, 52, 55), Especie = c("QUSU", 
+    "QUCA", "QUCA", "QUCA", "QUSU", "QUSU", "QUCA", "QUCA", "QUCA", 
+    "QUSU", "QUSU", "QUSU", "QUSU", "QUCA", "QUCA", "QUSU", "QUSU", 
+    "QUCA", "QUCA", "QUSU", "QUCA", "QUSU", "QUSU", "QUCA", "QUSU", 
+    "QUCA", "QUCA", "QUSU", "QUCA", "QUSU"), N_vasos = c(NA, 
+    4, 3, 3, NA, NA, 0, 4, 2, NA, NA, NA, NA, 2, 3, NA, NA, NA, 
+    2, NA, 4, NA, NA, 3, NA, 2, NA, NA, 5, NA), `TRW (mm) arriba` = c(NA, 
+    0.34, 0.34, 0.52, NA, NA, 0.31, 0.33, 0.18, NA, NA, NA, NA, 
+    0.37, 0.37, NA, NA, NA, 0.37, NA, 0.43, NA, NA, 0.57, NA, 
+    0.29, NA, NA, 0.27, NA), `TRW (mm) centro` = c(NA, 0.27, 
+    0.4, 0.58, NA, NA, 0.31, 0.24, 0.13, NA, NA, NA, NA, 0.37, 
+    0.32, NA, NA, NA, 0.32, NA, 0.5, NA, NA, 0.27, NA, 0.25, 
+    NA, NA, 0.22, NA), `TRW (mm) Abajo` = c(NA, 0.24, 0.4, 0.43, 
+    NA, NA, 0.38, 0.28, 0.2, NA, NA, NA, NA, 0.25, 0.44, NA, 
+    NA, NA, 0.19, NA, 0.42, NA, NA, 0.42, NA, 0.21, NA, NA, 0.3, 
+    NA), Area = c(NA, 0.36, 0.41, 0.47, NA, NA, 0.35, 0.3, 0.14, 
+    NA, NA, NA, NA, 0.41, 0.38, NA, NA, NA, 0.27, NA, 0.32, NA, 
+    NA, 0.43, NA, 0.24, NA, NA, 0.23, NA), Inicio_EW = c(NA, 
+    "SI", "SI", "SI", NA, NA, "SI", "SI", "SI", NA, NA, NA, NA, 
+    "SI", "SI", NA, NA, NA, "SI", NA, "SI", NA, NA, "SI", NA, 
+    "SI", NA, NA, "SI", NA), Completa_EW = c(NA, "SI", "SI", 
+    "SI", NA, NA, "SI", "SI", "SI", NA, NA, NA, NA, "SI", "SI", 
+    NA, NA, NA, "NO", NA, "SI", NA, NA, "NO", NA, "NO", NA, NA, 
+    "SI", NA), Inicio_LW = c(NA, "NO", "SI", "SI", NA, NA, "SI", 
+    "NO", "SI", NA, NA, NA, NA, "SI", "NO", NA, NA, NA, "NO", 
+    NA, "SI", NA, NA, "SI", NA, "NO", NA, NA, "SI", NA), Feret = c(NA, 
+    NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
+    NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA)), row.names = c(NA, 
+    -30L), class = "data.frame"), `10Jun2021` = structure(list(
+        Finca = c("Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir"), Plot = c(1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 
+        3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6), 
+        Tratam = c("Control", "Control", "Control", "Control", 
+        "Control", "Control", "Control", "Control", "Control", 
+        "Control", "Control", "Control", "Sequía", "Sequía", 
+        "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", 
+        "Sequía", "Control", "Control", "Control", "Control", 
+        "Control", "Control", "Sequía", "Sequía", "Sequía", 
+        "Sequía"), indv = c(1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 
+        13, 14, 17, 18, 19, 20, 23, 26, 30, 31, 36, 37, 38, 40, 
+        43, 44, 47, 51, 52, 55), Especie = c("QUSU", "QUCA", 
+        "QUCA", "QUCA", "QUSU", "QUSU", "QUCA", "QUCA", "QUCA", 
+        "QUSU", "QUSU", "QUSU", "QUSU", "QUCA", "QUCA", "QUSU", 
+        "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", "QUSU", "QUSU", 
+        "QUCA", "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", "QUSU"
+        ), Codigo = c(NA, "2QcC10J21", "3QcC10J21", "5QcC10J21", 
+        NA, NA, "8QcC10J21", "9QcC10J21", "10QcC10J21", NA, NA, 
+        NA, NA, "18QcS10J21", "19QcS10J21", NA, NA, NA, "30QcS10J21", 
+        NA, NA, NA, NA, "40QcC10J21", NA, "44QcC10J21", "47QcS10J21", 
+        NA, NA, NA), N_vasos = c(NA, 11, 13, 4, NA, NA, 14, 5, 
+        2, NA, NA, NA, NA, 11, 20, NA, NA, NA, 5, NA, NA, NA, 
+        NA, 6, NA, 6, 20, NA, NA, NA), `TRW (mm) arriba` = c(NA, 
+        0.49, 1.21, 0.42, NA, NA, 0.53, 0.33, 0.39, NA, NA, NA, 
+        NA, 1.11, 1.11, NA, NA, NA, 0.5, NA, NA, NA, NA, 0.55, 
+        NA, 0.5, 1.85, NA, NA, NA), `TRW (mm) centro` = c(NA, 
+        0.56, 1.31, 0.62, NA, NA, 0.55, 0.35, 0.35, NA, NA, NA, 
+        NA, 1.02, 1.09, NA, NA, NA, 0.53, NA, NA, NA, NA, 0.52, 
+        NA, 0.64, 1.69, NA, NA, NA), `TRW (mm) Abajo` = c(NA, 
+        0.49, 0.88, 0.63, NA, NA, 0.51, 0.33, 0.39, NA, NA, NA, 
+        NA, 1.08, 1.12, NA, NA, NA, 0.6, NA, NA, NA, NA, 0.59, 
+        NA, 0.73, 1.63, NA, NA, NA), Area = c(NA, 0.49, 1.19, 
+        0.58, NA, NA, 0.57, 0.31, 0.46, NA, NA, NA, NA, 1.23, 
+        1.29, NA, NA, NA, 0.64, NA, NA, NA, NA, 0.57, NA, 0.81, 
+        1.92, NA, NA, NA), Inicio_EW = c(NA, "SI", "SI", "SI", 
+        NA, NA, "SI", "SI", "SI", NA, NA, NA, NA, "SI", "SI", 
+        NA, NA, NA, "SI", NA, NA, NA, NA, "SI", NA, "SI", "SI", 
+        NA, NA, NA), Completa_EW = c(NA, "SI", "SI", "SI", NA, 
+        NA, "SI", "SI", "SI", NA, NA, NA, NA, "SI", "SI", NA, 
+        NA, NA, "SI", NA, NA, NA, NA, "SI", NA, "SI", "SI", NA, 
+        NA, NA), Inicio_LW = c(NA, "SI", "SI", "SI", NA, NA, 
+        "SI", "NO", "SI", NA, NA, NA, NA, "SI", "SI", NA, NA, 
+        NA, "SI", NA, NA, NA, NA, "SI", NA, "SI", "SI", NA, NA, 
+        NA), Feret = c(NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
+        NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
+        NA, NA, NA, NA, NA, NA)), row.names = c(NA, -30L), class = "data.frame"), 
+    `22Jul2021` = structure(list(Finca = c("Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir"
+    ), Plot = c(1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 
+    3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6), Tratam = c("Control", 
+    "Control", "Control", "Control", "Control", "Control", "Control", 
+    "Control", "Control", "Control", "Control", "Control", "Sequía", 
+    "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", 
+    "Sequía", "Control", "Control", "Control", "Control", "Control", 
+    "Control", "Sequía", "Sequía", "Sequía", "Sequía"), indv = c(1, 
+    2, 3, 5, 6, 7, 8, 9, 10, 11, 13, 14, 17, 18, 19, 20, 23, 
+    26, 30, 31, 36, 37, 38, 40, 43, 44, 47, 51, 52, 55), Especie = c("QUSU", 
+    "QUCA", "QUCA", "QUCA", "QUSU", "QUSU", "QUCA", "QUCA", "QUCA", 
+    "QUSU", "QUSU", "QUSU", "QUSU", "QUCA", "QUCA", "QUSU", "QUSU", 
+    "QUCA", "QUCA", "QUSU", "QUCA", "QUSU", "QUSU", "QUCA", "QUSU", 
+    "QUCA", "QUCA", "QUSU", "QUCA", "QUSU"), Codigo = c(NA, "2QcC22J21", 
+    "3QcC22J21", "5QcC22J21", NA, NA, "8QcC22J21", "9QcC22J21", 
+    "10QcC22J21", NA, NA, NA, NA, "18QcS22J21", "19QcS22J21", 
+    NA, NA, NA, "30QcS22J21", NA, "36QcC22J21", NA, NA, "40QcC22J21", 
+    NA, "44QcC22J21", "47QcS22J21", NA, "52QcS22J21", NA), N_vasos = c(NA, 
+    11, 28, 44, NA, NA, 28, 28, 48, NA, NA, NA, NA, 29, 27, NA, 
+    NA, NA, 48, NA, 20, NA, NA, 44, NA, 35, 26, NA, 12, NA), 
+        `TRW (mm) arriba` = c(NA, 0.48, 1.62, 1.14, NA, NA, 0.79, 
+        0.85, 1.09, NA, NA, NA, NA, 1.99, 1.85, NA, NA, NA, 1.41, 
+        NA, 0.51, NA, NA, 1.04, NA, 0.62, 2.74, NA, 0.27, NA), 
+        `TRW (mm) centro` = c(NA, 0.51, 1.5, 1.09, NA, NA, 0.86, 
+        0.86, 1, NA, NA, NA, NA, 1.79, 1.86, NA, NA, NA, 1.37, 
+        NA, 0.44, NA, NA, 1.06, NA, 0.59, 3.47, NA, 0.26, NA), 
+        `TRW (mm) Abajo` = c(NA, 0.71, 1.46, 1.1, NA, NA, 0.82, 
+        0.8, 1.05, NA, NA, NA, NA, 1.88, 1.79, NA, NA, NA, 1.37, 
+        NA, 0.51, NA, NA, 1.08, NA, 0.53, 3.14, NA, 0.4, NA), 
+        Area = c(NA, 0.5, 1.94, 1.26, NA, NA, 1.28, 0.9, 1.2, 
+        NA, NA, NA, NA, 1.94, 1.56, NA, NA, NA, 1.67, NA, 0.44, 
+        NA, NA, NA, NA, 0.64, 3.3, NA, 0.44, NA), Completa_EW = c(NA, 
+        "SI", "SI", "SI", NA, NA, "SI", "SI", "SI", NA, NA, NA, 
+        NA, "SI", "SI", NA, NA, NA, "SI", NA, "SI", NA, NA, "SI", 
+        NA, "SI", "SI", NA, "SI", NA), Inicio_LW = c(NA, "SI", 
+        "SI", "SI", NA, NA, "SI", "SI", "SI", NA, NA, NA, NA, 
+        "SI", "SI", NA, NA, NA, "SI", NA, "SI", NA, NA, "SI", 
+        NA, "SI", "SI", NA, "SI", NA), Feret = c(NA, NA, NA, 
+        NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
+        NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA)), row.names = c(NA, 
+    -30L), class = "data.frame"), `10AGOS_FENO` = structure(list(
+        Finca = c("Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir"), Plot = c(1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 
+        3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6), 
+        Tratam = c("Control", "Control", "Control", "Control", 
+        "Control", "Control", "Control", "Control", "Control", 
+        "Control", "Control", "Control", "Sequía", "Sequía", 
+        "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", 
+        "Sequía", "Control", "Control", "Control", "Control", 
+        "Control", "Control", "Sequía", "Sequía", "Sequía", 
+        "Sequía"), indv = c(1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 
+        13, 14, 17, 18, 19, 20, 23, 26, 30, 31, 36, 37, 38, 40, 
+        43, 44, 47, 51, 52, 55), Especie = c("QUSU", "QUCA", 
+        "QUCA", "QUCA", "QUSU", "QUSU", "QUCA", "QUCA", "QUCA", 
+        "QUSU", "QUSU", "QUSU", "QUSU", "QUCA", "QUCA", "QUSU", 
+        "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", "QUSU", "QUSU", 
+        "QUCA", "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", "QUSU"
+        ), Codigo = c(NA, "2QcC22J21", "3QcC22J21", "5QcC22J21", 
+        NA, NA, "8QcC22J21", "9QcC22J21", "10QcC22J21", NA, NA, 
+        NA, NA, "18QcS22J21", "19QcS22J21", NA, NA, "26QcS22J21", 
+        "30QcS22J21", NA, "36QcC22J21", NA, NA, "40QcC22J21", 
+        NA, "44QcC22J21", "47QcS22J21", NA, "52QcS22J21", NA), 
+        N_vasos = c(NA, 11, 28, 44, NA, NA, 28, 28, 48, NA, NA, 
+        NA, NA, 29, 27, NA, NA, NA, 48, NA, 20, NA, NA, 44, NA, 
+        35, NA, NA, 12, NA), `TRW (mm) arriba` = c(NA, 0.48, 
+        1.62, 1.14, NA, NA, 0.79, 0.85, 1.09, NA, NA, NA, NA, 
+        1.99, 1.85, NA, NA, NA, 1.41, NA, 0.51, NA, NA, 1.04, 
+        NA, 0.62, 2.74, NA, 0.27, NA), `TRW (mm) centro` = c(NA, 
+        0.51, 1.5, 1.09, NA, NA, 0.86, 0.86, 1, NA, NA, NA, NA, 
+        1.79, 1.86, NA, NA, NA, 1.37, NA, 0.44, NA, NA, 1.06, 
+        NA, 0.59, 3.47, NA, 0.26, NA), `TRW (mm) Abajo` = c(NA, 
+        0.71, 1.46, 1.1, NA, NA, 0.82, 0.8, 1.05, NA, NA, NA, 
+        NA, 1.88, 1.79, NA, NA, NA, 1.37, NA, 0.51, NA, NA, 1.08, 
+        NA, 0.53, 3.14, NA, 0.4, NA), Area = c(NA, 0.5, 1.94, 
+        1.26, NA, NA, 1.28, 0.9, 1.2, NA, NA, NA, NA, 1.94, 1.56, 
+        NA, NA, NA, 1.67, NA, 0.44, NA, NA, NA, NA, 0.64, 3.3, 
+        NA, 0.44, NA), Completa_EW = c(NA, "SI", "SI", "SI", 
+        NA, NA, "SI", "SI", "SI", NA, NA, NA, NA, "SI", "SI", 
+        NA, NA, NA, "SI", NA, "SI", NA, NA, "SI", NA, "SI", "SI", 
+        NA, "SI", NA), Inicio_LW = c(NA, "SI", "SI", "SI", NA, 
+        NA, "SI", "SI", "SI", NA, NA, NA, NA, "SI", "SI", NA, 
+        NA, NA, "SI", NA, "SI", NA, NA, "SI", NA, "SI", "SI", 
+        NA, "SI", NA), Feret = c(NA, NA, NA, NA, NA, NA, NA, 
+        NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
+        NA, NA, NA, NA, NA, NA, NA, NA, NA)), row.names = c(NA, 
+    -30L), class = "data.frame"), `26Aug21` = structure(list(
+        Finca = c("Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir"), Plot = c(1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 
+        3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6), 
+        Tratam = c("Control", "Control", "Control", "Control", 
+        "Control", "Control", "Control", "Control", "Control", 
+        "Control", "Control", "Control", "Sequía", "Sequía", 
+        "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", 
+        "Sequía", "Control", "Control", "Control", "Control", 
+        "Control", "Control", "Sequía", "Sequía", "Sequía", 
+        "Sequía"), indv = c(1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 
+        13, 14, 17, 18, 19, 20, 23, 26, 30, 31, 36, 37, 38, 40, 
+        43, 44, 47, 51, 52, 55), Especie = c("QUSU", "QUCA", 
+        "QUCA", "QUCA", "QUSU", "QUSU", "QUCA", "QUCA", "QUCA", 
+        "QUSU", "QUSU", "QUSU", "QUSU", "QUCA", "QUCA", "QUSU", 
+        "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", "QUSU", "QUSU", 
+        "QUCA", "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", "QUSU"
+        ), Codigo = c(NA, "2QcC9S21", "3QcC9S21", "5QcC9S21", 
+        NA, NA, NA, "9QcC9S21", "10QcC9S21", NA, NA, NA, NA, 
+        "18QcS9S21", NA, NA, NA, "26QcS9S21", "30QcS9S21", NA, 
+        "36QcC9S21", NA, NA, "40QcC9S21", NA, "44QcC9S21", "47QcS9S21", 
+        NA, NA, NA), N_vasos = c(NA, NA, NA, NA, NA, NA, NA, 
+        NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
+        NA, NA, NA, NA, NA, NA, NA, NA, NA), `TRW (mm) arriba` = c(NA, 
+        0.69, 1.25, 0.29, NA, NA, NA, 1.06, 0.93, NA, NA, NA, 
+        NA, 1.99, 2.07, NA, NA, NA, NA, NA, 0.71, NA, NA, 0.88, 
+        NA, 0.49, 0.8, NA, 0.67, NA), `TRW (mm) centro` = c(NA, 
+        0.72, 1.27, 0.44, NA, NA, NA, 0.99, 0.69, NA, NA, NA, 
+        NA, 1.79, 2, NA, NA, NA, NA, NA, 0.54, NA, NA, 0.87, 
+        NA, 0.48, 0.9, NA, 0.8, NA), `TRW (mm) Abajo` = c(NA, 
+        0.65, 1.4, 0.21, NA, NA, NA, 1.01, 0.97, NA, NA, NA, 
+        NA, 1.88, 2.3, NA, NA, NA, NA, NA, 0.52, NA, NA, 0.9, 
+        NA, 0.5, 1, NA, 0.64, NA), Area = c(NA, 0.65, 1.4, 0.21, 
+        NA, NA, NA, 0.65, 1.4, NA, NA, NA, NA, 0.65, 1.4, NA, 
+        NA, NA, NA, NA, 0.65, NA, NA, 0.65, NA, 0.65, 1.4, NA, 
+        0.65, NA), `escala 1 microm` = c(NA, "992.5", "2410021", 
+        NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
+        NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA)), row.names = c(NA, 
+    -30L), class = "data.frame"), `9Sep2021` = structure(list(
+        Finca = c("Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir"), Plot = c(1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 
+        3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6), 
+        Tratam = c("Control", "Control", "Control", "Control", 
+        "Control", "Control", "Control", "Control", "Control", 
+        "Control", "Control", "Control", "Sequía", "Sequía", 
+        "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", 
+        "Sequía", "Control", "Control", "Control", "Control", 
+        "Control", "Control", "Sequía", "Sequía", "Sequía", 
+        "Sequía"), indv = c(1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 
+        13, 14, 17, 18, 19, 20, 23, 26, 30, 31, 36, 37, 38, 40, 
+        43, 44, 47, 51, 52, 55), Especie = c("QUSU", "QUCA", 
+        "QUCA", "QUCA", "QUSU", "QUSU", "QUCA", "QUCA", "QUCA", 
+        "QUSU", "QUSU", "QUSU", "QUSU", "QUCA", "QUCA", "QUSU", 
+        "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", "QUSU", "QUSU", 
+        "QUCA", "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", "QUSU"
+        ), Codigo = c(NA, "2QcC9S21", "3QcC9S21", "5QcC9S21", 
+        NA, NA, "8QcC9S21", "9QcC9S21", "10QcC9S21", NA, NA, 
+        NA, NA, "18QcS9S21", NA, NA, NA, "26QcS9S21", "30QcS9S21", 
+        NA, "36QcC9S21", NA, NA, "40QcC9S21", NA, "44QcC9S21", 
+        "47QcS9S21", NA, NA, NA), N_vasos = c(NA, 24, 52, 46, 
+        NA, NA, 61, 22, 30, NA, NA, NA, NA, 41, NA, NA, NA, 9, 
+        29, NA, 19, NA, NA, 34, NA, 49, 21, NA, NA, NA), `TRW (mm) arriba` = c(NA, 
+        0.5, 1.38, 0.864, NA, NA, 0.752, 0.623, 0.873, NA, NA, 
+        NA, NA, 1.685, NA, NA, NA, NA, 1.507, NA, 0.513, NA, 
+        NA, 0.783, NA, 0.704, NA, NA, NA, NA), `TRW (mm) centro` = c(NA, 
+        0.4, 1.371, 0.93, NA, NA, 0.805, 0.672, 0.842, NA, NA, 
+        NA, NA, 1.553, NA, NA, NA, NA, 1.507, NA, 0.382, NA, 
+        NA, 0.839, NA, 0.69, NA, NA, NA, NA), `TRW (mm) Abajo` = c(NA, 
+        0.49, 1.37, 0.861, NA, NA, 0.857, 0.732, 0.792, NA, NA, 
+        NA, NA, 1.685, NA, NA, NA, NA, 1.452, NA, 0.454, NA, 
+        NA, 0.728, NA, 0.704, NA, NA, NA, NA), Area = c(NA, 0.49, 
+        1.547, 1.047, NA, NA, 0.897, 0.703, 1, NA, NA, NA, NA, 
+        1.43, NA, NA, NA, 0.499, 1.281, NA, 0.455, NA, NA, 1.024, 
+        NA, 0.704, 0.476, NA, NA, NA), `escala 1 microm` = c(NA, 
+        NA, NA, 740.9496, NA, NA, 802.971, 1235.0101, 722.5173, 
+        NA, NA, NA, NA, 850.3676, NA, NA, NA, 715.0393, 780, 
+        NA, 702.6112, NA, NA, 890.5055, NA, 1080.0116, 811.7094, 
+        NA, NA, NA)), row.names = c(NA, -30L), class = "data.frame"), 
+    `14Oct2021` = structure(list(Finca = c("Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir"
+    ), Plot = c(1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 
+    3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6), Tratam = c("Control", 
+    "Control", "Control", "Control", "Control", "Control", "Control", 
+    "Control", "Control", "Control", "Control", "Control", "Sequía", 
+    "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", 
+    "Sequía", "Control", "Control", "Control", "Control", "Control", 
+    "Control", "Sequía", "Sequía", "Sequía", "Sequía"), indv = c(1, 
+    2, 3, 5, 6, 7, 8, 9, 10, 11, 13, 14, 17, 18, 19, 20, 23, 
+    26, 30, 31, 36, 37, 38, 40, 43, 44, 47, 51, 52, 55), Especie = c("QUSU", 
+    "QUCA", "QUCA", "QUCA", "QUSU", "QUSU", "QUCA", "QUCA", "QUCA", 
+    "QUSU", "QUSU", "QUSU", "QUSU", "QUCA", "QUCA", "QUSU", "QUSU", 
+    "QUCA", "QUCA", "QUSU", "QUCA", "QUSU", "QUSU", "QUCA", "QUSU", 
+    "QUCA", "QUCA", "QUSU", "QUCA", "QUSU"), Codigo = c(NA, "2QcC14O21", 
+    "3QcC14O21", NA, NA, NA, "8QcC14O21", "9QcC14O21", "10QcC14O21", 
+    NA, NA, NA, NA, "18QcS14O21", NA, NA, NA, "26QcS14O21", "30QcS14O21", 
+    NA, "36QcC14O21", NA, NA, "40QcC14O21", NA, NA, "47QcS14O21", 
+    NA, "52QcS14O21", NA), N_vasos = c(NA, 5, 33, NA, NA, NA, 
+    22, 26, 38, NA, NA, NA, NA, 24, NA, NA, NA, 21, 18, NA, 35, 
+    NA, NA, 23, NA, NA, 38, NA, 24, NA), `TRW (mm) arriba` = c(NA, 
+    0.29, 1.73, NA, NA, NA, 0.69, 1.13, 0.86, NA, NA, NA, NA, 
+    2.8, NA, NA, NA, 0.31, 0.95, NA, 1.17, NA, NA, 0.88, NA, 
+    NA, 2.36, NA, 1.27, NA), `TRW (mm) centro` = c(NA, 0.36, 
+    1.76, NA, NA, NA, 0.65, 1.26, 0.9, NA, NA, NA, NA, 2.8, NA, 
+    NA, NA, 0.51, 0.99, NA, 1.27, NA, NA, 0.79, NA, NA, 2.3, 
+    NA, 1.29, NA), `TRW (mm) Abajo` = c(NA, 0.32, 1.77, NA, NA, 
+    NA, 0.63, 1.23, 0.97, NA, NA, NA, NA, 2.8, NA, NA, NA, 0.48, 
+    0.94, NA, 1.29, NA, NA, 0.88, NA, NA, 2.32, NA, 1.26, NA), 
+        Area = c(NA, 0.28, 2.04, NA, NA, NA, 0.68, 1.42, 1.02, 
+        NA, NA, NA, NA, 4.62, NA, NA, NA, 0.54, 0.99, NA, 1.44, 
+        NA, NA, 0.98, NA, NA, 2.48, NA, 1.34, NA), Completa_LW = c(NA, 
+        "NO", "NO", NA, NA, NA, "NO", "NO", "NO", NA, NA, NA, 
+        NA, "NO", NA, NA, NA, "NO", "NO", NA, "NO", NA, NA, "NO", 
+        NA, NA, "NO", NA, "NO", NA), Feret = c(NA, NA, NA, NA, 
+        NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
+        NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA)), row.names = c(NA, 
+    -30L), class = "data.frame"), `18Nov2021` = structure(list(
+        Finca = c("Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir"), Plot = c(1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 
+        3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6), 
+        Tratam = c("Control", "Control", "Control", "Control", 
+        "Control", "Control", "Control", "Control", "Control", 
+        "Control", "Control", "Control", "Sequía", "Sequía", 
+        "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", 
+        "Sequía", "Control", "Control", "Control", "Control", 
+        "Control", "Control", "Sequía", "Sequía", "Sequía", 
+        "Sequía"), indv = c(1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 
+        13, 14, 17, 18, 19, 20, 23, 26, 30, 31, 36, 37, 38, 40, 
+        43, 44, 47, 51, 52, 55), Especie = c("QUSU", "QUCA", 
+        "QUCA", "QUCA", "QUSU", "QUSU", "QUCA", "QUCA", "QUCA", 
+        "QUSU", "QUSU", "QUSU", "QUSU", "QUCA", "QUCA", "QUSU", 
+        "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", "QUSU", "QUSU", 
+        "QUCA", "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", "QUSU"
+        ), Codigo = c(NA, "2QcC18N21", "3QcC18N21", NA, NA, NA, 
+        "8QcC18N21", "9QcC18N21", "10QcC18N21", NA, NA, NA, NA, 
+        "18QcS18N21", "19QcS18N21", NA, NA, NA, "30QcS18N21", 
+        NA, "36QcC18N21", NA, NA, "40QcC18N21", NA, NA, "47QcS18N21", 
+        NA, NA, NA), N_vasos = c(NA, 32, 27, NA, NA, NA, 18, 
+        30, 12, NA, NA, NA, NA, 44, 38, NA, NA, NA, 25, NA, 25, 
+        NA, NA, 42, NA, NA, 34, NA, NA, NA), `TRW (mm) arriba` = c(NA, 
+        0.76, 1.38, 1.08, NA, NA, NA, 1.16, 0.71, NA, NA, NA, 
+        NA, 1.53, 1.4, NA, NA, NA, NA, NA, NA, NA, NA, 0.63, 
+        NA, NA, 2.07, NA, NA, NA), `TRW (mm) centro` = c(NA, 
+        0.77, 1.43, 1.06, NA, NA, NA, 1.01, 0.99, NA, NA, NA, 
+        NA, 1.56, 1.53, NA, NA, NA, NA, NA, NA, NA, NA, 0.56, 
+        NA, NA, 1.87, NA, NA, NA), `TRW (mm) Abajo` = c(NA, 0.75, 
+        1.32, 0.91, NA, NA, NA, 1.08, 0.85, NA, NA, NA, NA, 1.55, 
+        1.42, NA, NA, NA, NA, NA, NA, NA, NA, 0.55, NA, NA, 2.12, 
+        NA, NA, NA), Area = c(NA, 1.08, 1.19, NA, NA, NA, 0.61, 
+        1.06, 0.82, NA, NA, NA, NA, 1.67, 1.44, NA, NA, NA, 1.15, 
+        NA, 0.42, NA, NA, 0.65, NA, NA, 2.41, NA, NA, NA), Completa_LW = c(NA, 
+        "NO", "NO", "NO", NA, NA, "NO", "NO", "NO", NA, NA, NA, 
+        NA, "NO", "NO", NA, NA, NA, "NO", NA, "NO", NA, NA, "NO", 
+        NA, NA, "NO", NA, NA, NA), Feret = c(NA, NA, NA, NA, 
+        NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
+        NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA)), row.names = c(NA, 
+    -30L), class = "data.frame"), `16Dic2021` = structure(list(
+        Finca = c("Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir"), Plot = c(1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 
+        3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6), 
+        Tratam = c("Control", "Control", "Control", "Control", 
+        "Control", "Control", "Control", "Control", "Control", 
+        "Control", "Control", "Control", "Sequía", "Sequía", 
+        "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", 
+        "Sequía", "Control", "Control", "Control", "Control", 
+        "Control", "Control", "Sequía", "Sequía", "Sequía", 
+        "Sequía"), indv = c(1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 
+        13, 14, 17, 18, 19, 20, 23, 26, 30, 31, 36, 37, 38, 40, 
+        43, 44, 47, 51, 52, 55), Especie = c("QUSU", "QUCA", 
+        "QUCA", "QUCA", "QUSU", "QUSU", "QUCA", "QUCA", "QUCA", 
+        "QUSU", "QUSU", "QUSU", "QUSU", "QUCA", "QUCA", "QUSU", 
+        "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", "QUSU", "QUSU", 
+        "QUCA", "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", "QUSU"
+        ), Codigo = c(NA, "2QcC16D21", "3QcC16D21", NA, NA, NA, 
+        "8QcC16D21", NA, "10QcC16D21", NA, NA, NA, NA, "18QcC16D21", 
+        "19QcC16D21", NA, NA, NA, "30QcC16D21", NA, "36QcC16D21", 
+        NA, NA, NA, NA, "44QcC16D21", "47QcC16D21", NA, "52QcC16D21", 
+        NA), N_vasos = c(NA, 31, 52, NA, NA, NA, 74, NA, 36, 
+        NA, NA, NA, NA, 55, 55, NA, NA, NA, 28, NA, 28, NA, NA, 
+        NA, NA, 6, 34, NA, 25, NA), `TRW (mm) arriba` = c(NA, 
+        1.322, 1.86, NA, NA, NA, 1.15, NA, 1.1, NA, NA, NA, NA, 
+        1.55, 2.33, NA, NA, NA, 0.82, NA, 0.66, NA, NA, NA, NA, 
+        0.28, 3.3, NA, 2.11, NA), `TRW (mm) centro` = c(NA, 1.305, 
+        1.78, NA, NA, NA, 0.99, NA, 1.12, NA, NA, NA, NA, 1.51, 
+        2.36, NA, NA, NA, 0.84, NA, 0.66, NA, NA, NA, NA, 0.31, 
+        3.37, NA, 1.96, NA), `TRW (mm) Abajo` = c(NA, 1.232, 
+        1.77, NA, NA, NA, 1.14, NA, 1.02, NA, NA, NA, NA, 1.51, 
+        2.32, NA, NA, NA, 0.79, NA, 0.73, NA, NA, NA, NA, 0.19, 
+        3.37, NA, 1.98, NA), Area = c(NA, 1.23, 1.71, NA, NA, 
+        NA, 1.2, NA, 1.3, NA, NA, NA, NA, 1.75, 2.94, NA, NA, 
+        NA, 1.07, NA, 0.73, NA, NA, NA, NA, 0.17, 2.9, NA, 2.32, 
+        NA), Completa_LW = c(NA, "si", "no", NA, NA, NA, "SI", 
+        NA, "SI", NA, NA, NA, NA, "SI", "SI", NA, NA, NA, "SI", 
+        NA, "NO", NA, NA, NA, NA, "SI", "SI", NA, "SI", NA), 
+        Feret = c(NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
+        NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
+        NA, NA, NA, NA, NA)), row.names = c(NA, -30L), class = "data.frame"), 
+    `19Ene22` = structure(list(Finca = c("Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir"), Plot = c(1, 
+    1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 
+    5, 5, 5, 5, 5, 5, 6, 6, 6, 6), Tratam = c("Control", "Control", 
+    "Control", "Control", "Control", "Control", "Control", "Control", 
+    "Control", "Control", "Control", "Control", "Sequía", "Sequía", 
+    "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", 
+    "Control", "Control", "Control", "Control", "Control", "Control", 
+    "Sequía", "Sequía", "Sequía", "Sequía"), indv = c(1, 
+    2, 3, 5, 6, 7, 8, 9, 10, 11, 13, 14, 17, 18, 19, 20, 23, 
+    26, 30, 31, 36, 37, 38, 40, 43, 44, 47, 51, 52, 55), Especie = c("QUSU", 
+    "QUCA", "QUCA", "QUCA", "QUSU", "QUSU", "QUCA", "QUCA", "QUCA", 
+    "QUSU", "QUSU", "QUSU", "QUSU", "QUCA", "QUCA", "QUSU", "QUSU", 
+    "QUCA", "QUCA", "QUSU", "QUCA", "QUSU", "QUSU", "QUCA", "QUSU", 
+    "QUCA", "QUCA", "QUSU", "QUCA", "QUSU"), Codigo = c(NA, "2QcC19E22", 
+    "3QcC19E22", "5QcC19E22", NA, NA, NA, "9QcC19E22", "10QcC19E22", 
+    NA, NA, NA, NA, "18QcS19E22", "19QcS19E22", NA, NA, NA, "30QcS19E22", 
+    NA, "36QcC19E22", NA, NA, "40QcC19E22", NA, "44QcC19E22", 
+    "47QcS19E22", NA, "52QcS19E22", NA), N_vasos = c(NA, 45, 
+    60, 40, NA, NA, NA, 34, 41, NA, NA, NA, NA, 37, 70, NA, NA, 
+    NA, 25, NA, 11, NA, NA, 30, NA, 46, 26, NA, 34, NA), `TRW (mm) arriba` = c(NA, 
+    1.504, 1.275, 1.375, NA, NA, NA, 0.78, 0.464, NA, NA, NA, 
+    NA, 2.429, 1.531, NA, NA, NA, NA, NA, 0.657, NA, NA, 0.929, 
+    NA, NA, 2.555, NA, 1.2, NA), `TRW (mm) centro` = c(NA, 1.488, 
+    1.27, 1.347, NA, NA, NA, 0.758, 0.445, NA, NA, NA, NA, 2.429, 
+    1.599, NA, NA, NA, NA, NA, 0.64, NA, NA, 0.947, NA, NA, 2.501, 
+    NA, 1.2, NA), `TRW (mm) Abajo` = c(NA, 1.29, 1.17, 1.326, 
+    NA, NA, NA, 0.837, 0.535, NA, NA, NA, NA, 2.38, 1.66, NA, 
+    NA, NA, NA, NA, 0.679, NA, NA, 0.94, NA, NA, 2.503, NA, 0.983, 
+    NA), Area = c(NA, 1.391, 1.228, 1.568, NA, NA, NA, 0.766, 
+    0.46, NA, NA, NA, NA, 1.942, 1.483, NA, NA, NA, 1.07, NA, 
+    0.458, NA, NA, 0.896, NA, 0.584, 1.936, NA, 0.913, NA), Completa_LW = c(NA, 
+    "SI", "NO", "NO", NA, NA, NA, "SI", "SI", NA, NA, NA, NA, 
+    "NO", "SI", NA, NA, NA, "SI", NA, "SI", NA, NA, "SI", NA, 
+    "SI", "SI", NA, "SI", NA), `escala 1 microm` = c(NA, 677.5046, 
+    1065.0117, 855.1316, NA, NA, NA, 1075.1046, 1190, NA, NA, 
+    NA, NA, 532.5235, 865.0578, NA, NA, NA, 1002.8117, NA, 1186.7814, 
+    NA, NA, 1125.0111, NA, 1480.5404, 538.5913, NA, 960.4686, 
+    NA)), row.names = c(NA, -30L), class = "data.frame"), `8Feb22` = structure(list(
+        Finca = c("Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+        "Gamir"), Plot = c(1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 
+        3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6), 
+        Tratam = c("Control", "Control", "Control", "Control", 
+        "Control", "Control", "Control", "Control", "Control", 
+        "Control", "Control", "Control", "Sequía", "Sequía", 
+        "Sequía", "Sequía", "Sequía", "Sequía", "Sequía", 
+        "Sequía", "Control", "Control", "Control", "Control", 
+        "Control", "Control", "Sequía", "Sequía", "Sequía", 
+        "Sequía"), indv = c(1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 
+        13, 14, 17, 18, 19, 20, 23, 26, 30, 31, 36, 37, 38, 40, 
+        43, 44, 47, 51, 52, 55), Especie = c("QUSU", "QUCA", 
+        "QUCA", "QUCA", "QUSU", "QUSU", "QUCA", "QUCA", "QUCA", 
+        "QUSU", "QUSU", "QUSU", "QUSU", "QUCA", "QUCA", "QUSU", 
+        "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", "QUSU", "QUSU", 
+        "QUCA", "QUSU", "QUCA", "QUCA", "QUSU", "QUCA", "QUSU"
+        ), Codigo = c(NA, "2QcC2F22", "3QcC2F22", "5QcC2F22", 
+        NA, NA, "8QcC2F22", NA, "10QcC2F22", NA, NA, NA, NA, 
+        NA, "19QcS2F22", NA, NA, NA, "30QcS2F22", NA, NA, NA, 
+        NA, "40QcC2F22", NA, "44QcC2F22", NA, NA, "52QcS2F22", 
+        NA), N_vasos = c(NA, 27, 92, 39, NA, NA, 28, NA, 30, 
+        NA, NA, NA, NA, NA, 55, NA, NA, NA, 57, NA, NA, NA, NA, 
+        29, NA, 36, NA, NA, 54, NA), `TRW (mm) arriba` = c(NA, 
+        0.67, 1.27, 1.7, NA, NA, 0.99, NA, 0.7, NA, NA, NA, NA, 
+        NA, 2.5, NA, NA, NA, 1.2, NA, NA, NA, NA, 1.01, NA, 0.46, 
+        NA, NA, 1.4, NA), `TRW (mm) centro` = c(NA, 0.72, 1.26, 
+        1.7, NA, NA, 0.99, NA, 0.72, NA, NA, NA, NA, NA, 2.5, 
+        NA, NA, NA, 1.2, NA, NA, NA, NA, 1.3, NA, 0.34, NA, NA, 
+        1.4, NA), `TRW (mm) Abajo` = c(NA, 0.64, 1.31, 1.7, NA, 
+        NA, 1.03, NA, 0.84, NA, NA, NA, NA, NA, 2.5, NA, NA, 
+        NA, 1.2, NA, NA, NA, NA, 1.08, NA, 0.34, NA, NA, 1.4, 
+        NA), Area = c(NA, 0.82, 1.45, 2.4, NA, NA, 1.08, NA, 
+        0.77, NA, NA, NA, NA, NA, 2.95, NA, NA, NA, NA, NA, NA, 
+        NA, NA, 1.25, NA, 0.39, NA, NA, 1.36, NA), Completa_LW = c(NA, 
+        "SI", "SI", "SI", NA, NA, "SI", NA, "SI", NA, NA, NA, 
+        NA, NA, "SI", NA, NA, NA, "SI", NA, NA, NA, NA, "SI", 
+        NA, "SI", NA, NA, "SI", NA), Feret = c(NA, NA, NA, NA, 
+        NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
+        NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA)), row.names = c(NA, 
+    -30L), class = "data.frame"), ray_area = structure(list(Finca = c(NA, 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir"), Plot = c(NA, 1, 1, 1, 1, 1, 1, 2, 2, 2, 
+    2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 6, 6, 
+    6, 6), Tratam = c(NA, "Control", "Control", "Control", "Control", 
+    "Control", "Control", "Control", "Control", "Control", "Control", 
+    "Control", "Control", "Sequía", "Sequía", "Sequía", "Sequía", 
+    "Sequía", "Sequía", "Sequía", "Sequía", "Control", "Control", 
+    "Control", "Control", "Control", "Control", "Sequía", "Sequía", 
+    "Sequía", "Sequía"), Árbol = c(NA, 1, 2, 3, 5, 6, 7, 8, 
+    9, 10, 11, 13, 14, 17, 18, 19, 20, 23, 26, 30, 31, 36, 37, 
+    38, 40, 43, 44, 47, 51, 52, 55), Especie = c(NA, "QUSU", 
+    "QUCA", "QUCA", "QUCA", "QUSU", "QUSU", "QUCA", "QUCA", "QUCA", 
+    "QUSU", "QUSU", "QUSU", "QUSU", "QUCA", "QUCA", "QUSU", "QUSU", 
+    "QUCA", "QUCA", "QUSU", "QUCA", "QUSU", "QUSU", "QUCA", "QUSU", 
+    "QUCA", "QUCA", "QUSU", "QUCA", "QUSU"), Codigo = c(NA, NA, 
+    "2QcC2F22", "3QcC2F22", "5QcC2F22", NA, NA, "8QcC2F22", "9QcC2F22", 
+    "10QcC2F22", NA, NA, NA, NA, "18QcS2F22", "19QcS2F22", NA, 
+    NA, "26QcS2F22", "30QcS2F22", NA, "36QcC2F22", NA, NA, "40QcC2F22", 
+    NA, "44QcC2F22", "47QcS2F22", NA, "52QcS2F22", NA), Ray_2020 = c(NA, 
+    NA, 0.567464, 0, 0, NA, NA, 0.0351, 0.232, 0, NA, NA, NA, 
+    NA, 0.535103333333333, 0.696073333333333, NA, NA, 0.34104, 
+    0.608926666666667, NA, NA, NA, NA, 0, NA, 0, 1.96592666666667, 
+    NA, 0, NA), Ray_2021 = c(NA, NA, 0.500994, 0.355401666666667, 
+    0, NA, NA, 0, 0.226416666666667, 0.105412, NA, NA, NA, NA, 
+    0.895099333333333, 0, NA, NA, 0.244, 0.4464, NA, 0.250293333333333, 
+    NA, NA, 0.173653333333333, NA, 0, 1.72597166666667, NA, 0.526620333333333, 
+    NA)), row.names = c(NA, -31L), class = "data.frame")), Datos_pie = structure(list(
+    Finca = c("Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", "Gamir", 
+    "Gamir", "Gamir", "Gamir"), Plot = c(1, 1, 1, 2, 2, 2, 3, 
+    3, 4, 4, 5, 5, 5, 6, 6, 6), Tratam = c("Control", "Control", 
+    "Control", "Control", "Control", "Control", "Sequía", "Sequía", 
+    "Sequía", "Sequía", "Control", "Control", "Control", "Sequía", 
+    "Sequía", "Sequía"), Árbol = c(2, 3, 5, 8, 9, 10, 18, 
+    19, 26, 30, 36, 40, 44, 47, 52, 60), Especie = c("QUCA", 
+    "QUCA", "QUCA", "QUCA", "QUCA", "QUCA", "QUCA", "QUCA", "QUCA", 
+    "QUCA", "QUCA", "QUCA", "QUCA", "QUCA", "QUCA", "QUCA"), 
+    `DBH_(cm)` = c(24.8281130634072, 31.035141329259, 31.5126050420168, 
+    24.6689584924879, 9.07181054239878, 12.095747389865, 14.3239113827349, 
+    23.7140310669722, 25.7830404889228, 25.7830404889228, 15.5971479500891, 
+    28.3295136236313, 23.2365673542144, 7.95772854596384, 13.2098293863, 
+    7.95772854596384), `H_(cm)` = c(1300, 1250, 1200, 1100, 1000, 
+    1150, 1200, 1300, 1150, 1200, 1100, 1200, 1150, 800, 900, 
+    800), `Diametro_copa_(cm)` = c(500, 960, 1000, 713, 500, 
+    815, 900, 1700, 860, 823, 605, 785, 603, 601, 603, 601)), row.names = c(NA, 
+-16L), class = c("tbl_df", "tbl", "data.frame")))
+
+```
+
+```{r clima, include=FALSE}
+###creo una lista para meter los gráficos
+clima_plot <- list()
+
+#######Temperatura y VPD
+
+temperatura <- clima$temp 
+
+##calculo el SPD y el AVP
+temperatura$SVP <- 0.6108 * exp((17.27 * temperatura$`Temperatura_(C)`) / (temperatura$`Temperatura_(C)` + 237.3))
+temperatura$AVP <-  temperatura$SVP * (temperatura$Humedad_relativa / 100)
+temperatura$VPD <-  temperatura$SVP - temperatura$AVP
+
+##hago la media diaria de los valores de temperatura, humedad, maximo y minimo de temperatura diaria
+temperatura <- split(temperatura, temperatura$date)
+temperatura <- lapply(temperatura, function(x){
+  df <-  data.frame("Tmean" = mean(x$`Temperatura_(C)`), "Tmin" = min(x$`Temperatura_(C)`), "Tmax" = max(x$`Temperatura_(C)`), "VPD" = mean(x$VPD) )
+})
+x <- 0
+while(x < length(temperatura)){
+  x <- x +1
+  temperatura[[x]]$date <- names(temperatura[x])
+}
+rm(x)
+temperatura <- do.call(rbind, Map(data.frame,temperatura ) )
+
+temperatura$date <- as.Date(temperatura$date)
+
+clima$VPD <- data.frame("date" = temperatura$date, "VPD" = temperatura$VPD)
+temperatura$VPD <- NULL 
+
+##ahora uno ambas temperaturas
+
+clima$temp <- rbind(clima$temp_Feb21 ,temperatura)
+clima$temp_Feb21 <- NULL
 
 ###sectorizo  las fechas tanto de prp como de temperatura
-Gamir_Nov21_Feb22_Temp <- Gamir[Gamir$date >= as.Date("2020-11-01") & Gamir$date <= as.Date("2022-02-28"),]
-Gamir_Nov21_Feb22_prp <- gamir_Nov2020_Feb2022[gamir_Nov2020_Feb2022$date >= as.Date("2020-11-01") & gamir_Nov2020_Feb2022$date <= as.Date("2022-02-28"),]
 
-# prp_gamir + geom_line(data=Gamir_Nov21_Feb22_Temp, aes(x= date,y= (Tmean)*5), color = "black", lwd= 0.9)+
-# geom_line(data=Gamir_Nov21_Feb22_Temp, aes(x= date,y= (Tmax)*5), color = "#FF3030", lwd= 0.9)+
-#   geom_line(data=Gamir_Nov21_Feb22_Temp, aes(x= date,y= (Tmin)*5), color = "#1C86EE", lwd= 0.9)+
-#   scale_y_continuous(
-#     name = "precipitation (mm)",
-#     breaks = c(25, 50, 75, 100, 125, 150, 175, 200),
-#     expand = c(0, 0),
-#     sec.axis = sec_axis(~ . / 5, name = "Temperature (ºC)",
-#                         breaks = c(-5, 0, 5, 10, 15, 20, 25, 30, 35, 40))) ###posible 
-# 
 
-###figura 2
+clima <- lapply(clima, function(x){
+  ifelse("date" %in% names(x), x <-  x[x$date >= as.Date("2020-11-01") & x$date <= as.Date("2022-02-28"),], x <- x )  
+              return(x)})
 
-gamir_Nov2020_Feb2022$doy <- yday(gamir_Nov2020_Feb2022$date)
+clima$prp$date <- as.Date(clima$prp$date)
+precipitacion <- clima$prp
+precipitacion <- precipitacion[names(precipitacion) %in% c("date","Prcp")]
 
-ggplot()+
-  geom_bar(data=gamir_Nov2020_Feb2022, aes(date, as.numeric(Prcp)),stat = "identity",
+precipitacion$year_month <- format(precipitacion$date, "%Y-%m")
+
+group_month <- aggregate(Prcp ~ year_month, data = precipitacion, sum)
+group_month$date <- as.Date(paste(group_month$year_month,'-01',sep = "")) 
+
+
+###total de precipitacion
+sum(precipitacion$Prcp)
+
+
+##grafico precipitacion
+precipitacion$doy <- yday(precipitacion$date)
+
+clima_plot$prp <- ggplot()+
+  geom_bar(data=precipitacion, aes(date, as.numeric(Prcp)),stat = "identity",
            show.legend = FALSE,position = "dodge", fill= "#00BFFF")+
   theme(panel.background = element_rect(fill = "white"),
           axis.line.x = element_line(colour="black"),
@@ -130,9 +961,17 @@ ggplot()+
   ylab("precipitation (mm)")+
   xlab(" ")
 
-temp <- ggplot() + geom_line(data=Gamir_Nov21_Feb22_Temp, aes(as.Date(date, "%y/%m/%d"), Tmean), color = "black", lwd= 0.9)+
-geom_line(data=Gamir_Nov21_Feb22_Temp, aes(as.Date(date, "%y/%m/%d"), Tmax), color = "#FF3030", lwd= 0.9)+
-  geom_line(data=Gamir_Nov21_Feb22_Temp, aes(as.Date(date, "%y/%m/%d"), Tmin), color = "#1C86EE", lwd= 0.9)+
+
+
+
+
+###figura 2
+
+temperatura <- clima$temp
+
+clima_plot$temp <-  ggplot() + geom_line(data=temperatura, aes(as.Date(date, "%y/%m/%d"), Tmean), color = "black", lwd= 0.9)+
+geom_line(data=temperatura, aes(as.Date(date, "%y/%m/%d"), Tmax), color = "#FF3030", lwd= 0.9)+
+  geom_line(data=temperatura, aes(as.Date(date, "%y/%m/%d"), Tmin), color = "#1C86EE", lwd= 0.9)+
   scale_y_continuous(name="Temperature (ºC)",breaks= c(-5,0,5,10,15,20,25,30,35,40),
                      expand = c(0,0))+
   scale_x_date(date_breaks = "1 month" ,date_labels = " ")+
@@ -140,11 +979,12 @@ geom_line(data=Gamir_Nov21_Feb22_Temp, aes(as.Date(date, "%y/%m/%d"), Tmax), col
           axis.line.x = element_line(colour="black"),
           axis.line.y = element_line(colour="black"))+
   xlab(" ")
-temp
+
 
 ####Humedad suelo
 
-Hum_suelo <- read_delim("C:/Minicores/HOBO/Humedad_suelo/Humedad_suelo_Modificado.csv", delim = ";" )
+Hum_suelo <- clima$Hum
+
 Hum_suelo <- split(Hum_suelo, Hum_suelo$Site)
 Hum_suelo <- Hum_suelo$Gamir
 nombre_columnas_fecha <- names(Hum_suelo)  ##cojo los nombres de la humedad de suelo (las fechas)
@@ -154,6 +994,8 @@ Hum_suelo <- reshape2::melt(Hum_suelo, id.vars=c("Site", "Plot","Point","Treatme
                      measure.vars= nombre_columnas_fecha, 
                      value.name="values", 
                      variable.name="date")
+
+##veo como se comportan las variables
 
 Hum_suelo$site_tr <- paste0(Hum_suelo$Site, "_", Hum_suelo$Treatment)
 ggplot(data= Hum_suelo, aes(x= as.Date(date, format = "%d/%m/%Y"), y= as.numeric(values), color= site_tr))+
@@ -167,6 +1009,7 @@ Hum_suelo$date <- as.Date(Hum_suelo$date, format = "%d/%m/%Y")
 Hum_suelo$date1 <- as.numeric(Hum_suelo$date)
 Hum_suelo$values <- as.numeric(Hum_suelo$values)
 Hum_suelo$Depth <- as.factor(Hum_suelo$Depth)
+Hum_suelo$Plot <- as.factor(Hum_suelo$Plot)
 Hum_suelo$Treatment <- as.factor(Hum_suelo$Treatment)
 Hum_suelo$Depth_point <- paste0(Hum_suelo$Point, "_", Hum_suelo$Depth)
 
@@ -188,7 +1031,8 @@ qqline(residuos)
 hist(residuos) ###son normales
 ###preguntar heterosasticidad
 
-predict <- get_predictions(modelo_humedad$gam, 
+###le hago el predict al modelo
+predict_Humedad <- get_predictions(modelo_humedad$gam, 
                        cond = list( Depth = rep( unique(Hum_suelo$Depth), length(unique(Hum_suelo$date1))),
                                     date1= rep(unique(Hum_suelo$date1), each=8),
                                     Treatment= rep(unique(Hum_suelo$Treatment), each=4),
@@ -196,38 +1040,40 @@ predict <- get_predictions(modelo_humedad$gam,
                                     Point = 1, se= T))
 
 
-predict <- unique(predict)
+predict_Humedad <- unique(predict_Humedad)
 
-ggplot()+
+clima_plot$Hum <-  ggplot()+
   geom_point(data = Hum_suelo, aes(x= as.Date(Hum_suelo$date1), y= as.numeric(values), colour= Treatment), alpha= 0.1)+
-  geom_line(data= predict, aes(x= as.Date(predict$date1), y= predict$fit, colour = predict$Treatment), lwd=0.9, show.legend = F)+
+  geom_line(data= predict_Humedad, aes(x= as.Date(date1), y= fit, colour = Treatment), lwd=0.9, show.legend = F)+
   facet_grid(. ~ Depth)+
   theme(panel.background = element_rect(fill = "white"),
           axis.line.x = element_line(colour="black"),
           axis.line.y = element_line(colour="black"))+
   scale_color_manual(values=c("#0000FF",'#CD3333'))+
-  geom_ribbon(data= predict, alpha=.3, mapping = aes(x=as.Date(predict$date1), ymin= predict$fit-predict$CI, ymax= predict$fit +predict$CI, fill=predict$Treatment),colour= NA, show.legend = F)+
+  geom_ribbon(data= predict_Humedad, alpha=.3, mapping = aes(x=as.Date(date1), ymin= fit-CI, ymax= fit +CI, fill=Treatment),colour= NA, show.legend = F)+
   scale_fill_manual(values=c("#00EEEE",'#FF4040'))
 
 
-
 ###SPEI
-Gamir_Nov21_Feb22_Temp$PET <- hargreaves(Tmin=Gamir_Nov21_Feb22_Temp$Tmin, Tmax=Gamir_Nov21_Feb22_Temp$Tmax, lat= 36.569 )
+ 
 
-Gamir_Nov21_Feb22_Temp$prp <- Gamir_Nov21_Feb22_prp$Prcp
+clima$temp$PET <- hargreaves(Tmin=clima$temp$Tmin, Tmax=clima$temp$Tmax, lat= 36.569 )
 
-Gamir21_CWL <- Gamir_Nov21_Feb22_Temp$prp - Gamir_Nov21_Feb22_Temp$PET
-spei1 <- spei(Gamir21_CWL, scale =1 )
+clima$temp$prp <- clima$prp$Prcp
 
-spei_data <- data.frame(
-  time = seq.Date(from = as.Date("2020-11-01"), by = "day", length.out = length(spei1$fitted)),
-  spei = spei1$fitted
+Prp_PET <- clima$temp$prp - clima$temp$PET
+
+clima$SPEI <- spei(Prp_PET, scale =1 )
+
+clima$SPEI <- data.frame(
+  time = seq.Date(from = as.Date("2020-11-01"), by = "day", length.out = length(clima$SPEI$fitted)),
+  spei = clima$SPEI$fitted
 )
 
 
-spei_data$sing <- ifelse(as.numeric(spei_data$spei) >= 0, "pos", "neg") 
+clima$SPEI$sing <- ifelse(as.numeric(clima$SPEI$spei) >= 0, "pos", "neg") 
 
-SPEI_plot <- ggplot(spei_data, aes(x = time, y = spei, col = sing, fill = sing)) +
+clima_plot$SPEI <-  ggplot(clima$SPEI, aes(x = time, y = spei, col = sing, fill = sing)) +
   geom_bar(show.legend = F, stat = "identity") +
   scale_color_manual(values = c("pos" = "darkblue", "neg" = "red")) +
   scale_fill_manual(values = c("pos"  = "darkblue", "neg" = "red")) +
@@ -239,12 +1085,9 @@ SPEI_plot <- ggplot(spei_data, aes(x = time, y = spei, col = sing, fill = sing))
 
 ##VPD
 
-
-HOBO_gamir <- HOBO_gamir[HOBO_gamir$date >= as.Date("2020-11-01") & HOBO_gamir$date <= as.Date("2022-02-28"),]
-
-dayly_prp_gamir  <- ggplot()+
-  geom_line(data = HOBO_gamir, aes(x=date, y=VPD*10), color= "black", lwd=0.7, linetype= 8)+
-  geom_bar(data=gamir_Nov2020_Feb2022, aes(date, as.numeric(Prcp)),stat = "identity",
+clima_plot$prp <- ggplot()+
+  geom_line(data = clima$VPD, aes(x=date, y=VPD*10), color= "black", lwd=0.7, linetype= 8)+
+  geom_bar(data=clima$prp, aes(date, as.numeric(Prcp)),stat = "identity",
            show.legend = FALSE,position = "dodge", fill= "#00BFFF")+
   theme(panel.background = element_rect(fill = "white"),
           axis.line.x = element_line(colour="black"),
@@ -258,316 +1101,167 @@ dayly_prp_gamir  <- ggplot()+
 ##Plots
 
 
-plot_grid(temp,dayly_prp_gamir,plot_Hum_suelo_30,SPEI_plot, ncol = 1)
+plot_grid(clima_plot$temp,clima_plot$prp,clima_plot$SPEI, ncol = 1)
 
 
 ```
 
 ```{r Phenology canariensis_EW, include=FALSE}
-setwd("C:/Minicores/R_analisis") ##es el Working directory de la mayoria de los archivos. 
-Qca_phenology <- read_excel_allsheets("Datos_Modificados_Qca.xlsx")
+Qca_phenology <- Minicore_fielddata$Minicore_TRW
 Qca_phenology <- Qca_phenology[ names(Qca_phenology) != "ray_area"]
 Qca_phenology <- eliminar_filas_NA_lista(Qca_phenology, "N_vasos")
-Datos_pie <- read_ods("Datos_Pie.ods")
-Datos_pie <- split(Datos_pie, Datos_pie$Especie)
-Datos_pie_Qca <- Datos_pie$QUCA
-Datos_dendrometros <- read_ods("Datos_dendrometros.ods", col_names = FALSE)
-colnames(Datos_dendrometros) <-  Datos_dendrometros[1,]
-Datos_dendrometros <- Datos_dendrometros[-1,]
+
+
  ###elimino las columnas y las fechas que no son interesantes para este analisis
+Qca_phenology <- lapply(Qca_phenology, function(x){
+  if( !(("Inicio_EW" %in% names(x)) | ("Inicio_LW" %in% names(x)))) {return(NULL)}
+  return(x)
+})
+Qca_phenology <- Qca_phenology[!sapply(Qca_phenology, is.null)]
 
-Qca_phenology <- Qca_phenology[!names(Qca_phenology) %in% c("9Sep21","26Aug21") ]
-Qca_phenology <- lapply(Qca_phenology, function(x) x[!(names(x) %in% c("Finca", "Especie","N_vasos", "TRW (mm) arriba", "TRW (mm) centro", "TRW (mm) Abajo",  "Area", "Feret", "escala 1 microm", "N_anillos"))])
+Qca_phenology <- lapply(Qca_phenology, function(x) x[(names(x) %in% c("Plot", "Tratam", "indv","Inicio_EW", "Inicio_LW"))])
 
-##añadimos una columna con las fechas del muestreo y cogemos las fechas de los dendrometros
-fechas <- c("02/02/2021", "18/03/2021","01/04/2021","15/04/2021","29/04/2021","10/06/2021","22/07/2021","10/08/2021","09/09/2021","14/10/2021","18/11/2021","16/12/2021","19/01/2022","08/02/2022")
+##añadimos una columna con las fechas del muestreo 
+fechas <- c("02/02/2021", "18/03/2021","01/04/2021","15/04/2021","29/04/2021","13/05/2021","27/05/2021" ,"10/06/2021","22/07/2021","10/08/2021")
 Qca_phenology <- mapply(cbind, Qca_phenology, "date"=as.Date(fechas, "%d/%m/%Y" ), SIMPLIFY=F)
 
 
-####junto datos del individuo (no se si meter el DBH de los dendrometros)
-Datos_pie_Qca <- Datos_pie_Qca[!names(Datos_pie_Qca) %in% c("Especie", "Finca", "DBH_(cm)","Tratam","Plot")]
-names(Datos_pie_Qca)[names(Datos_pie_Qca) == 'Árbol'] <- 'indv'
+####junto datos de pie a individuo
+Minicore_fielddata$Datos_pie <- Minicore_fielddata$Datos_pie[!names(Minicore_fielddata$Datos_pie) %in% c("Especie", "Finca","Tratam","Plot")]
+names(Minicore_fielddata$Datos_pie)[names(Minicore_fielddata$Datos_pie) == 'Árbol'] <- 'indv'
 
-Qca_phenology <- lapply(Qca_phenology, function(x) {merge(x,Datos_pie_Qca, by=c("indv"))})
+Qca_phenology <- lapply(Qca_phenology, function(x) {x <- merge(x,Minicore_fielddata$Datos_pie, by=c("indv"))
+ if(!( "Inicio_LW" %in% names(x))){x$Inicio_LW <- NA}
+ if(!("Inicio_EW" %in% names(x))){x$Inicio_EW <- NA}
+return(x)
+})
+
+Qca_phenology <- do.call(rbind, Map(data.frame, Qca_phenology))
+
+####empezamos a hacer el analisis de EW y LW
+
+Qca_phenology$Inicio_EW <- as.factor(tolower(Qca_phenology$Inicio_EW))
+Qca_phenology$Inicio_LW <- as.factor(tolower(Qca_phenology$Inicio_LW))
+Qca_phenology$date_1 <- yday(Qca_phenology$date) ##se reformula la fecha en DOY
+Qca_phenology$Tratam <- as.factor(Qca_phenology$Tratam)
+Qca_phenology$Plot <- as.factor(Qca_phenology$Plot)
+Qca_phenology$indv <- as.factor(Qca_phenology$indv)
+Qca_phenology$Inicio_EW_bin <- ifelse(Qca_phenology$Inicio_EW == "si", 1, 0)
+Qca_phenology$Inicio_LW_bin <- ifelse(Qca_phenology$Inicio_LW == "si", 1, 0)
+####veo si hay colinealidad en mis variables
+df <- data.frame("DBH"= Qca_phenology$DBH_.cm. , "H"= Qca_phenology$H_.cm. , "Dcopa"= Qca_phenology$Diametro_copa_.cm. )
+cor(df)
+summary(lm(formula = DBH ~ ., data = df)) #####correlacionado el H con el DBH, por lo tanto elijo la altura como variables
+rm(df)
+
+##modelos ########mirar con ELI pongo solo Plot ya que PLOT recoge casi toda la variabilidad
+modelo1 <- glm(data = Qca_phenology, Inicio_EW_bin ~ scale(date_1) + scale(H_.cm.) + scale(Diametro_copa_.cm.) + Tratam  , family = binomial) ##29.0
+summary(modelo1)$varcor
+modelo2 <- glmer(data = Qca_phenology, Inicio_EW_bin ~ scale(date_1) + scale(Diametro_copa_.cm.)+ Tratam  + (1|indv), family = binomial) ##36.9
+modelo3 <- glmer(data = Qca_phenology, Inicio_EW_bin ~ scale(date_1) + scale(H_.cm.)+ Tratam  + (1|indv), family = binomial) ##36.8
+# modelo4 <- glmer(data = Qca_phenology, Inicio_EW_bin ~ scale(date_1) + scale(H_.cm.)*scale(Diametro_copa_.cm.)+ Tratam  + (1|indv), family = binomial) ##35.4 ##me genera error
 
 
-####empezamos a hacer los analisis con el inicio de la EW
-Qca_phenology_start_EW <-  list(Qca_phenology$"2Feb21", Qca_phenology$"18Marz2021", Qca_phenology$"1Abr2021", Qca_phenology$"15Abr2021", Qca_phenology$"29Abr21", Qca_phenology$"10Jun21")
-Qca_phenology_start_EW <- lapply(Qca_phenology_start_EW, function(x) x[!(names(x) %in% c("Completa_EW", "Inicio_LW"))])
-Qca_phenology_start_EW <- reduce(Qca_phenology_start_EW, rbind)
-Qca_phenology_start_EW$Inicio_EW <- tolower(Qca_phenology_start_EW$Inicio_EW)
-Qca_phenology_start_EW$Inicio_EW <- ifelse(Qca_phenology_start_EW$Inicio_EW == "si", 1, 0) ###se usa ifelse ya que se puede poner el combinado de si o no
+modelo5 <- glmer(data = Qca_phenology, Inicio_EW_bin ~ scale(date_1)+ Tratam  + (1|indv), family = binomial) #30.2
 
 
-Qca_phenology_start_EW$date <- yday(Qca_phenology_start_EW$date) ##se reformula la fecha en DOY
 
-Qca_phenology_start_EW$Tratam <- as.factor(Qca_phenology_start_EW$Tratam)
-Qca_phenology_start_EW$Tratam1 <- ifelse(Qca_phenology_start_EW$Tratam == "Control", "0","1")
-Qca_phenology_start_EW$Plot <- as.factor(Qca_phenology_start_EW$Plot)
-Qca_phenology_start_EW$H_.cm. <- Qca_phenology_start_EW$`H_(cm)`
-Qca_phenology_start_EW$Diametro_copa_.cm. <- Qca_phenology_start_EW$`Diametro_copa_(cm)`
-vif(glm(data = Qca_phenology_start_EW, Inicio_EW ~ date + H_.cm.+ Diametro_copa_.cm.+ Tratam), family = "binomial") ##no hay colinealidad
+model.sel(modelo1, modelo2, modelo3, modelo5) ###mejor modelo es el modelo 1
 
-Qca_phenology_start_EW$date_z <- scale(Qca_phenology_start_EW$date)
-Qca_phenology_start_EW$H_z <- scale(Qca_phenology_start_EW$H_.cm.)
-Qca_phenology_start_EW$Dc_z <- scale(Qca_phenology_start_EW$Diametro_copa_.cm.)
-modelo1 <- glmmTMB(data = Qca_phenology_start_EW, Inicio_EW ~ date_z + H_z+ Dc_z+ Tratam + (1|Plot), family = binomial(link = "logit"))
+
+r2(modelo5)
 summary(modelo1)
-modelo2 <- glmmTMB(data = Qca_phenology_start_EW, Inicio_EW ~ date_z +H_z + Tratam + (1|Plot), family = binomial(link = "logit")) ###AIC  38.334
-# summary(modelo2)
-modelo3 <- glmmTMB(data = Qca_phenology_start_EW, Inicio_EW ~ date_z +H_z+ Dc_z+ (1|Plot), family = binomial(link = "logit"))
-summary(modelo3) 
-###AIC  37.679
-modelo4 <- glmmTMB(data = Qca_phenology_start_EW, Inicio_EW ~ date_z +H_z+ (1|Plot), family = binomial(link = "logit"))
-summary(modelo4)
-###AIC  36.938
-modelo5 <- glmmTMB(data = Qca_phenology_start_EW, Inicio_EW ~ date_z +H_z + (1|Plot), family = binomial(link = "logit"))
-summary(modelo5)
-###AIC  37.913
-modelo7<- glmmTMB(data = Qca_phenology_start_EW, Inicio_EW ~ date_z + Tratam + (1|Plot), family = binomial(link = "logit"))
-summary(modelo7)
-###AIC 37.347
-modelo8<- glmmTMB(data = Qca_phenology_start_EW, Inicio_EW ~ date_z + Dc_z+ (1|Plot), family = binomial(link = "logit"))
-summary(modelo8)
-###AIC 39.108
-modelo9<- glmmTMB(data = Qca_phenology_start_EW, Inicio_EW ~ date_z + Dc_z +Tratam+ (1|Plot), family =binomial(link = "logit"))
-summary(modelo9)
-###AIC 39.347
-anova(modelo1, modelo2, modelo3, modelo4, modelo5, modelo7, modelo8, modelo9, test="Chisq")
-model.sel(modelo1, modelo2, modelo3, modelo4, modelo5, modelo7,modelo8, modelo9) 
+residuos <- residuals(modelo5)
+qqnorm(residuos)
+qqline(residuos)
+hist(residuos) ###son normales
 
+#####graficarlo
 
-r2(modelo3)
-
-
-####estadisticamente no es significativo este adelantamiento de la fenologia modelo 4,3,5 son los mas optimos, siendo el que tiene mayor simplicidad el modelo 4 el mas simple, por tanto elijo ese
-
-###graficarlo
-####control
-data.frame_control_predict_EW <- data.frame(
-  date_z = seq(min(Qca_phenology_start_EW$date_z), max(Qca_phenology_start_EW$date_z), length.out = 100),
-  H_z = 0,  # media (estandarizado)
-  Dc_z = 0, # media (estandarizado)
-  Plot = NA,  # glmmTMB ignora esto si no es necesario para predicción
-  Tratam= "Control"
+df <- expand.grid(
+  Tratam = levels(Qca_phenology$Tratam),
+  H_.cm. = mean(Qca_phenology$H_.cm., na.rm=TRUE),
+  Diametro_copa_.cm. = mean(Qca_phenology$Diametro_copa_.cm., na.rm=TRUE),
+  date_1 = seq(min(Qca_phenology$date_1), max(Qca_phenology$date_1), length.out = 100),
+  indv= 5,
+  Plot = 1
 )
-predict_control_EW <- predict(modelo2, newdata = data.frame_control_predict_EW, type = "link", se.fit = TRUE)
-data.frame_control_predict_EW <- data.frame_control_predict_EW %>%
-  mutate(
-    fit_link = predict_control_EW$fit,
-    se = predict_control_EW$se.fit,
-    fit_resp = plogis(fit_link),  # transformar logit a probabilidad
-    lower = plogis(fit_link - 1.96 * se),
-    upper = plogis(fit_link + 1.96 * se)
-  )
-ggplot(data.frame_control_predict_EW, aes(x = date_z, y = fit_resp)) +
-  geom_line(color = "blue", size = 1) +
-  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.3, fill = "blue") +
-  labs(
-    x = "Fecha estandarizada (date_z)",
-    y = "Probabilidad predicha de Inicio_EW",
-    title = "Efecto de la fecha sobre el inicio de EW"
-  ) +
-  theme_minimal()
-
-#####sequia
-data.frame_sequia_predict_EW <- data.frame(
-  date_z = seq(min(Qca_phenology_start_EW$date_z), max(Qca_phenology_start_EW$date_z), length.out = 100),
-  H_z = 0,  # media (estandarizado)
-  Dc_z = 0, # media (estandarizado)
-  Plot = NA,  # glmmTMB ignora esto si no es necesario para predicción
-  Tratam= "Sequía"
-)
-predict_sequia_EW <- predict(modelo2, newdata = data.frame_sequia_predict_EW, type = "link", se.fit = TRUE)
-data.frame_sequia_predict_EW <- data.frame_sequia_predict_EW %>%
-  mutate(
-    fit_link = predict_sequia_EW$fit,
-    se = predict_sequia_EW$se.fit,
-    fit_resp = plogis(fit_link),  # transformar logit a probabilidad
-    lower = plogis(fit_link - 1.96 * se),
-    upper = plogis(fit_link + 1.96 * se)
-  )
-ggplot(data.frame_sequia_predict_EW, aes(x = date_z, y = fit_resp)) +
-  geom_line(color = "red", size = 1) +
-  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.3, fill = "red") +
-  labs(
-    x = "Fecha estandarizada (date_z)",
-    y = "Probabilidad predicha de Inicio_EW",
-    title = "Efecto de la fecha sobre el inicio de EW"
-  ) +
-  theme_minimal()
 
 
+predict_Ci <- predictInterval(modelo5,
+                              newdata = df,
+                              level = 0.95,
+                              type = "probability",
+                              stat = "mean")
 
-##Plot
-#########tengo que reescalar las fechasfill
-##reescalo las fechas
+df$fit <- predict_Ci$fit
+df$upr <- predict_Ci$upr
+df$lwr <- predict_Ci$lwr
+ggplot(data = df, aes(x = date_1, y=fit, colour = Tratam ))+
+  geom_line()+
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = Tratam), alpha = 0.2, color = NA)+
+  scale_color_manual(values= c("blue", "red"))+
+  scale_fill_manual(values= c("blue", "red"))+
+  scale_x_continuous(limits = c(30,150), breaks = seq(from=40, to=160, by=20))
 
-date_mean <- mean(Qca_phenology_start_EW$date)
-date_sd <- sd(Qca_phenology_start_EW$date)
 
-datos_unidos <- rbind(data.frame_sequia_predict_EW, data.frame_control_predict_EW)
-datos_unidos$date_original <- datos_unidos$date_z * date_sd + date_mean
-
-
-
-ggplot(datos_unidos, aes(x = date_original, y = fit_resp)) +
-  geom_line(aes(color = Tratam),  size = 1) +
-  geom_ribbon(aes(ymin = lower, ymax = upper, fill= Tratam), alpha = 0.3, ) +
-  scale_color_manual(values = c("blue","red"))+
-  scale_fill_manual(values = c("blue","red"))+
-  labs(
-    x = "Fecha",
-    y = "Probabilidad predicha de Inicio_EW",
-    title = "Efecto de la fecha sobre el inicio de EW"
-  ) +
-  theme_minimal()
-####plot
-
-simulateResiduals(modelo4, plot = T)
-
+# Día donde prob supera 0.5 = inicio estimado de EW
+# inicio_est <- newdat$date_1[which.min(abs(newdat$prob_EW - 0.5))]
+# inicio_est
 
 
 ```
 
 ```{r Phenology canariensis_LW, include=FALSE}
+rm(modelo1, modelo2, modelo3, modelo4, modelo5)
+##modelos
+modelo1 <- glmer(data = Qca_phenology, Inicio_LW_bin ~ scale(date_1) + scale(H_.cm.) + scale(Diametro_copa_.cm.) + Tratam  + (1|indv), family = binomial) ##56.3
+summary(modelo1)$varcor #####no es por el random factor
+########me da error con el factor de Plot no explica mi varianza
+modelo2 <- glmer(data = Qca_phenology, Inicio_LW_bin ~ scale(date_1) + scale(Diametro_copa_.cm.)+ Tratam  + (1|indv), family = binomial) ##54.3
+modelo3 <- glmer(data = Qca_phenology, Inicio_LW_bin ~ scale(date_1) + scale(H_.cm.)+ Tratam  + (1|indv), family = binomial) ##53.9
+modelo4 <- glmer(data = Qca_phenology, Inicio_LW_bin ~ scale(date_1) + scale(H_.cm.)*scale(Diametro_copa_.cm.)+ Tratam  + (1|indv), family = binomial) ##58.7
+modelo5 <- glmer(data = Qca_phenology, Inicio_LW_bin ~ scale(date_1)+ Tratam  + (1|indv), family = binomial) #52.7
 
-####empezamos a hacer los analisis con el inicio de la LW
-Qca_phenology_start_LW <-  list(Qca_phenology$"1Abr2021", Qca_phenology$"15Abr2021", Qca_phenology$"29Abr2021", Qca_phenology$"10Jun2021", Qca_phenology$"22Jul2021", Qca_phenology$"19AGOS_FENO")
-Qca_phenology_start_LW <- lapply(Qca_phenology_start_LW, function(x) x[!(names(x) %in% c("Inicio_EW", "Completa_EW"))])
-Qca_phenology_start_LW <- reduce(Qca_phenology_start_LW, rbind)
-Qca_phenology_start_LW$Inicio_LW <- tolower(Qca_phenology_start_LW$Inicio_LW)
-Qca_phenology_start_LW$Inicio_LW <- ifelse(Qca_phenology_start_LW$Inicio_LW == "si", 1, 0) ###se usa ifelse ya que se puede poner el combinado de si o no
 
 
-Qca_phenology_start_LW$date <- yday(Qca_phenology_start_LW$date) ##se reformula la fecha en DOY
+model.sel(modelo1, modelo2, modelo3, modelo4, modelo5) ###mejor modelo es el modelo 5
 
-Qca_phenology_start_LW$Tratam1 <- ifelse(Qca_phenology_start_LW$Tratam == "Control", 1, 0) 
-Qca_phenology_start_LW$Tratam <- as.factor(Qca_phenology_start_LW$Tratam)
-Qca_phenology_start_LW$Plot <- as.factor(Qca_phenology_start_LW$Plot)
-Qca_phenology_start_LW <- Qca_phenology_start_LW[!(is.na(Qca_phenology_start_LW$Inicio_LW) |Qca_phenology_start_LW == " ") ,  ] ###elimino las filas que no me afectan para este calculo
 
-Qca_phenology_start_LW$date_z <- scale(Qca_phenology_start_LW$date)
-Qca_phenology_start_LW$H_z <- scale(Qca_phenology_start_LW$`H_(cm)`)
-Qca_phenology_start_LW$Dc_z <- scale(Qca_phenology_start_LW$`Diametro_copa_(cm)`)
-Qca_phenology_start_LW <- Qca_phenology_start_LW[complete.cases(Qca_phenology_start_LW$indv),]
-modelo1 <- glmmTMB(data = Qca_phenology_start_LW, Inicio_LW ~ date_z + H_z+ Dc_z+ Tratam + (1|Plot), family = binomial(link = "logit"))
-summary(modelo1)
-
-modelo2 <- glmmTMB(data = Qca_phenology_start_LW, Inicio_LW ~ date_z +H_z + Tratam+ (1|Plot), family = binomial(link = "logit"))
-
-modelo3 <- glmmTMB(data = Qca_phenology_start_LW, Inicio_LW ~ date_z +H_z+ Dc_z+ (1|Plot), family = binomial(link = "logit"))
-summary(modelo3) 
-
-modelo4 <- glmmTMB(data = Qca_phenology_start_LW, Inicio_LW ~ date_z +H_z+ (1|Plot), family = binomial(link = "logit"))
+r2(modelo4)
 summary(modelo4)
+residuos <- residuals(modelo4)
+qqnorm(residuos)
+qqline(residuos)
+hist(residuos) ###son normales
 
-modelo5 <- glmmTMB(data = Qca_phenology_start_LW, Inicio_LW ~ date_z +H_z + (1|Plot), family = binomial(link = "logit"))
-summary(modelo5)
+#####graficarlo
 
-modelo6<- glmmTMB(data = Qca_phenology_start_LW, Inicio_LW ~ date_z + Tratam + (1|Plot), family = binomial(link = "logit"))
-summary(modelo7)
+df$indv <- 2
+predict_Ci <- predictInterval(modelo4,
+                              newdata = df,
+                              level = 0.95,
+                              type = "probability",
+                              stat = "mean")
 
-modelo7<- glmmTMB(data = Qca_phenology_start_LW, Inicio_LW ~ date_z + Dc_z+ (1|Plot), family = binomial(link = "logit"))
-summary(modelo8)
-
-modelo8<- glmmTMB(data = Qca_phenology_start_LW, Inicio_LW ~ date_z + Dc_z +Tratam+ (1|Plot), family =binomial(link = "logit"))
-
-
-anova(modelo1, modelo2, modelo3, modelo4, modelo5, modelo6,modelo7, modelo8, test="Chisq")
-model.sel(modelo1, modelo2, modelo3, modelo4, modelo5, modelo6,modelo7, modelo8)
-#####mejor modelo es el 2 y 4, cojo el modelo 2, ya que es el más simple el 4. 
-simulateResiduals(modelo6, plot = T)
-
-data.frame_control_predict <- data.frame(Tratam="Control", 
-  date_z = seq(min(Qca_phenology_start_LW$date_z), max(Qca_phenology_start_LW$date_z), length.out = 100), Plot= 1) ##se genera el data frame para los predict
-predict_control <- predict(modelo6, type = "link", se.fit = TRUE, newdata = data.frame_control_predict ) ##se hace el predict del modelo
-
-
-
-###graficarlo
-####control
-Qca_phenology_start_LW <- Qca_phenology_start_LW[complete.cases(Qca_phenology_start_LW),]
-data.frame_control_predict_LW <- data.frame(
-  date_z = seq(min(Qca_phenology_start_LW$date_z), max(Qca_phenology_start_LW$date_z), length.out = 100),
-  H_z = 0,  # media (estandarizado)
-  Dc_z = 0, # media (estandarizado)
-  Plot = NA,  # glmmTMB ignora esto si no es necesario para predicción
-  Tratam= "Control"
-)
-predict_control_LW <- predict(modelo6, newdata = data.frame_control_predict_LW, type = "link", se.fit = TRUE)
-data.frame_control_predict_LW <- data.frame_control_predict_LW %>%
-  mutate(
-    fit_link = predict_control_LW$fit,
-    se = predict_control_LW$se.fit,
-    fit_resp = plogis(fit_link),  # transformar logit a probabilidad
-    lower = plogis(fit_link - 1.96 * se),
-    upper = plogis(fit_link + 1.96 * se)
-  )
-ggplot(data.frame_control_predict_LW, aes(x = date_z, y = fit_resp)) +
-  geom_line(color = "blue", size = 1) +
-  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.3, fill = "blue") +
-  labs(
-    x = "Fecha estandarizada (date_z)",
-    y = "Probabilidad predicha de Inicio_EW",
-    title = "Efecto de la fecha sobre el inicio de EW"
-  ) +
-  theme_minimal()
-
-#####sequia
-data.frame_sequia_predict_LW <- data.frame(
-  date_z = seq(min(Qca_phenology_start_LW$date_z), max(Qca_phenology_start_LW$date_z), length.out = 100),
-  H_z = 0,  # media (estandarizado)
-  Dc_z = 0, # media (estandarizado)
-  Plot = NA,  # glmmTMB ignora esto si no es necesario para predicción
-  Tratam= "Sequía"
-)
-predict_sequia_LW <- predict(modelo6, newdata = data.frame_sequia_predict_LW, type = "link", se.fit = TRUE)
-data.frame_sequia_predict_LW <- data.frame_sequia_predict_LW %>%
-  mutate(
-    fit_link = predict_sequia_LW$fit,
-    se = predict_sequia_LW$se.fit,
-    fit_resp = plogis(fit_link),  # transformar logit a probabilidad
-    lower = plogis(fit_link - 1.96 * se),
-    upper = plogis(fit_link + 1.96 * se)
-  )
-ggplot(data.frame_sequia_predict_LW, aes(x = date_z, y = fit_resp)) +
-  geom_line(color = "red", size = 1) +
-  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.3, fill = "red") +
-  labs(
-    x = "Fecha estandarizada (date_z)",
-    y = "Probabilidad predicha de Inicio_EW",
-    title = "Efecto de la fecha sobre el inicio de EW"
-  ) +
-  theme_minimal()
+df$fit <- predict_Ci$fit
+df$upr <- predict_Ci$upr
+df$lwr <- predict_Ci$lwr
+ggplot(data = df, aes(x = date_1, y=fit, colour = Tratam ))+
+  geom_line()+
+  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = Tratam), alpha = 0.2, color = NA)+
+  scale_color_manual(values= c("blue", "red"))+
+  scale_fill_manual(values= c("blue", "red"))
 
 
-##Plot
-#########tengo que reescalar las fechasfill
-##reescalo las fechas
-
-date_mean <- mean(Qca_phenology_start_LW$date)
-date_sd <- sd(Qca_phenology_start_LW$date)
-
-datos_unidos <- rbind(data.frame_sequia_predict_LW, data.frame_control_predict_LW)
-datos_unidos$date_original <- datos_unidos$date_z * date_sd + date_mean
+# Día donde prob supera 0.5 = inicio estimado de EW
+# inicio_est <- newdat$date_1[which.min(abs(newdat$prob_EW - 0.5))]
+# inicio_est
 
 
+######el modelo da issingular hay que arreglarlo
 
-ggplot(datos_unidos, aes(x = date_original, y = fit_resp)) +
-  geom_line(aes(color = Tratam),  size = 1) +
-  geom_ribbon(aes(ymin = lower, ymax = upper, fill= Tratam), alpha = 0.3, ) +
-  scale_color_manual(values = c("blue","red"))+
-  scale_fill_manual(values = c("blue","red"))+
-  labs(
-    x = "Fecha",
-    y = "Probabilidad predicha de Inicio_EW",
-    title = "Efecto de la fecha sobre el inicio de EW"
-  ) +
-  theme_minimal()
-
-
-
+rm(modelo1, modelo2, modelo3, modelo4, modelo5)
 ```
 
 ```{r Análisis de 2020/2021 Qca, include=FALSE}
@@ -3818,6 +4512,7 @@ season_climate_plots$Spring
 season_climate_plots$Summer
 
 ```
+
 
 
 
