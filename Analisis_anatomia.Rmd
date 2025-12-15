@@ -1264,532 +1264,292 @@ ggplot(data = df, aes(x = date_1, y=fit, colour = Tratam ))+
 rm(modelo1, modelo2, modelo3, modelo4, modelo5)
 ```
 
-```{r Análisis de 2020/2021 Qca, include=FALSE}
-##2020 EW
-setwd("C:/Minicores/Qca_Bruto/ImageJ/Tablas/a4-02-2021")
-name_documents <- list.files(pattern = '*.csv') ##hace una lista con todos los nombres de archivos csv de la carpeta
-Qca2020 <- lapply(name_documents, read_delim, delim = ',') #se abren los documentos seleccionados
-names(Qca2020) <- name_documents #conecta los nombre de la lista con los nombres de los documentos
+## EW
 
-EW_2020 <- list("Qc2.20" = Qca2020$a2QcC4F21.csv[c(1,20), ],"Qc3.20" = Qca2020$b3QcC_4F21.csv[c(32,44, 48,49), ], "Qc5.20" =Qca2020$c5QcC4F21.csv[c(10,21,23,32,43,57,64), ], "Qc8.20" = Qca2020$d8QcC4F21.csv[c(1,3,9,18), ],"Qc9.20" = Qca2020$e9QcC4F21.csv[c(19), ],"Qc10.20" = Qca2020$f10QcC4F21.csv[c(7,18), ],"Qc18.20" = Qca2020$g18QcS4F21.csv[c(8), ],"Qc19.20" = Qca2020$h19QcS4F21.csv[c(1,3), ],"Qc26.20" = Qca2020$i26QcS4F21.csv[c(1,19,30,31), ],"Qc30.20" = Qca2020$j30QcCSF21.csv[c(14,30,42, 51,57), ], "Qc40.20" = Qca2020$k40QcC4F21.csv[c(1,8,27), ], "Qc44.20" = Qca2020$l44QcC4F21.csv[c(7,12,20,26,29), ],"Qc47.20" = Qca2020$m47QcS4F21.csv[c(1,2,12,13,42,43), ],"Qc52.20" = Qca2020$n52QcS4F21.csv[c(4,6,25,27,31,33,37,38,44), ]) #####se hace una lista con todos los vasos de EW del año 2020
+###datos
+EW <- list("Qc2.20" = Qca2020_21$Qca20$a2QcC4F21.csv[c(1,20), ],"Qc3.20" = Qca2020_21$Qca20$b3QcC_4F21.csv[c(32,44, 48,49), ], "Qc5.20" =Qca2020_21$Qca20$c5QcC4F21.csv[c(10,21,23,32,43,57,64), ], "Qc8.20" = Qca2020_21$Qca20$d8QcC4F21.csv[c(1,3,9,18), ],"Qc9.20" = Qca2020_21$Qca20$e9QcC4F21.csv[c(19), ],"Qc10.20" = Qca2020_21$Qca20$f10QcC4F21.csv[c(7,18), ],"Qc18.20" = Qca2020_21$Qca20$g18QcS4F21.csv[c(8), ],"Qc19.20" = Qca2020_21$Qca20$h19QcS4F21.csv[c(1,3), ],"Qc26.20" = Qca2020_21$Qca20$i26QcS4F21.csv[c(1,19,30,31), ],"Qc30.20" = Qca2020_21$Qca20$j30QcCSF21.csv[c(14,30,42, 51,57), ], "Qc40.20" = Qca2020_21$Qca20$k40QcC4F21.csv[c(1,8,27), ], "Qc44.20" = Qca2020_21$Qca20$l44QcC4F21.csv[c(7,12,20,26,29), ],"Qc47.20" = Qca2020_21$Qca20$m47QcS4F21.csv[c(1,2,12,13,42,43), ],"Qc52.20" = Qca2020_21$Qca20$n52QcS4F21.csv[c(4,6,25,27,31,33,37,38,44), ]) #####se hace una lista con todos los vasos de EW del año 2020
 
+EW_21 <- list("Qc2.21" = Qca2020_21$Qca21$a2QcC19E22.csv[c(1,9,11,12,14,16,17,24,28,29,31,35,38,43,45), ],"Qc3.21" = Qca2020_21$Qca21$b3QcC19E22.csv[c(1,29,30,35,55,58,59), ], "Qc5.21" =Qca2020_21$Qca21$c5QcC19E22.csv[c(1,6,13,15,19,24,32,37,39,40), ], "Qc9.21" = Qca2020_21$Qca21$d9QcC19E22.csv[c(18,27), ],"Qc18.21" = Qca2020_21$Qca21$h18QcS19E22.csv[c(19,21,23,32,36), ],"Qc19.21" = Qca2020_21$Qca21$i19QcS19E22.csv[c(1,23,36), ],"Qc30.21" = Qca2020_21$Qca21$j30QcS19E22.csv[c(2,9,16,21,25), ], "Qc36.21" = Qca2020_21$Qca21$k36QcC19E22.csv[c(1,6), ], "Qc40.21" = Qca2020_21$Qca21$m40QcC19E22.csv[c(1,16,29), ], "Qc44.21" = Qca2020_21$Qca21$n44QcC19E22.csv[c(5,10,19,42), ],"Qc47.21" = Qca2020_21$Qca21$o47QcS19E22.csv[c(1,3,4), ],"Qc52.21" = Qca2020_21$Qca21$r52QcS19E22.csv[c(7,13,21,29), ]) #####se hace una lista con todos los vasos de EW del año 2021
+
+LW <- list("Qc2.20" = Qca2020_21$Qca20$a2QcC4F21.csv[-c(1,2,3,5,7,20,8,13,19,10,25,30,36,39), ],"Qc3.20" = Qca2020_21$Qca20$b3QcC_4F21.csv[-c(32,44, 48,49,20,42,34,14,41,43,35), ], "Qc5.20" =Qca2020_21$Qca20$c5QcC4F21.csv[-c(10,21,23,32,43,57,64,57,62,60,38,50,53,20,25,35,54,63,58,52), ], "Qc8.20" = Qca2020_21$Qca20$d8QcC4F21.csv[-c(1,3,9,18), ],"Qc9.20" = Qca2020_21$Qca20$e9QcC4F21.csv[-c(4,7,19,33,38,48,51,55,54,56,20,14,8,10,12,16,25,20), ],"Qc10.20" = Qca2020_21$Qca20$f10QcC4F21.csv[-c(7,18), ],"Qc18.20" = Qca2020_21$Qca20$g18QcS4F21.csv[-c(8), ],"Qc19.20" = Qca2020_21$Qca20$h19QcS4F21.csv[-c(1,3), ],"Qc26.20" = Qca2020_21$Qca20$i26QcS4F21.csv[-c(1,19,30,31), ],"Qc30.20" = Qca2020_21$Qca20$j30QcCSF21.csv[-c(14,30,42, 51,57,20,34,40,52,49,53,56,58,41,38), ], "Qc40.20" = Qca2020_21$Qca20$k40QcC4F21.csv[-c(1,8,27), ], "Qc44.20" = Qca2020_21$Qca20$l44QcC4F21.csv[-c(7,12,20,26,29), ],"Qc47.20" = Qca2020_21$Qca20$m47QcS4F21.csv[-c(1,2,12,13,42,43), ],"Qc52.20" = Qca2020_21$Qca20$n52QcS4F21.csv[-c(4,6,25,27,31,33,37,38,44), ]) #####se hace una lista con todos los vasos menos los de EW del año 2020
+
+LW_21 <- list("Qc2.21" = Qca2020_21$Qca21$a2QcC19E22.csv[-c(1,9,11,12,14,16,17,24,28,29,31,35,38,43,45), ],"Qc3.21" = Qca2020_21$Qca21$b3QcC19E22.csv[-c(1,18,19,23,29,30,35,40,46,49,51,53,55,58,59,20,24,2,5,28,42,32), ], "Qc5.21" =Qca2020_21$Qca21$c5QcC19E22.csv[-c(1,6,13,15,19,24,32,37,39,40), ], "Qc9.21" = Qca2020_21$Qca21$d9QcC19E22.csv[-c(18,27), ],"Qc10.21" = Qca2020_21$Qca21$e10QcC19E22.csv[-c(12,22,26,27,33), ],"Qc18.21" = Qca2020_21$Qca21$h18QcS19E22.csv[-c(19,21,23,32,36), ],"Qc19.21" = Qca2020_21$Qca21$i19QcS19E22.csv[-c(1,23,36), ],"Qc30.21" = Qca2020_21$Qca21$j30QcS19E22.csv[-c(2,9,16,21,25), ], "Qc36.21" = Qca2020_21$Qca21$k36QcC19E22.csv[-c(1,6), ], "Qc40.21" = Qca2020_21$Qca21$m40QcC19E22.csv[-c(1,16,29), ], "Qc44.21" = Qca2020_21$Qca21$n44QcC19E22.csv[-c(5,8,10,19,33,38,42,21,13,26,40,46), ],"Qc47.21" = Qca2020_21$Qca21$o47QcS19E22.csv[-c(1,3,4), ],"Qc52.21" = Qca2020_21$Qca21$r52QcS19E22.csv[-c(7,13,21,29), ]) #####se hace una lista con todos los vasos de EW del año 2021, ademas elimino los fallos que tiene en la lectura de algunos vasos de la LW
+
+LW <- c(LW, LW_21)
+EW <- c(EW, EW_21)
+LW_EW <- list()
+LW_EW$EW <- EW
+LW_EW$LW <- LW
+rm(EW_21, LW_21, LW, EW)
+###le hago una columna con su indv y year
+
+n <- 0
+while (n < length(LW_EW)) {
+  n <- n +1
+  x <- 0
+  while(x < length(LW_EW[[n]])){
+  x <- x +1
+  LW_EW[[n]][[x]]$indv <- names(LW_EW[[n]])[x]
+  ifelse(unique(grepl("20", LW_EW[[n]][[x]]$indv)), LW_EW[[n]][[x]]$year <- 2020, LW_EW[[n]][[x]]$year <- 2021  )
+  LW_EW[[n]][[x]]$N_vessels <- length( LW_EW[[n]][[x]]$Area)
+} 
+  
+}
+
+rm(x,n)
+
+####escribo bien la columna de individuos y uno los dataframes de EW/LW
+LW_EW <-lapply(LW_EW, function(x){
+  x <- lapply(x, function(y){
+    
+    y$indv <- gsub( "Qc", "",
+                   gsub( ".20", "",
+                         gsub( ".21", "", as.character(y$indv))))
+  y <- y[c("indv", 'Area', 'Feret', "year", "N_vessels")]
+  return(y)
+    })
+   x <- do.call(rbind.data.frame, x)
+   return(x)
+  })
+
+control <- c(2,3,5,8,9,10,36,40,44)
+
+###clasifico por tratamiento y primera visualizacion
+LW_EW <- lapply(LW_EW, function(x){
+  x$indv <- as.numeric(x$indv)
 ###Separamos entre control y sequia
-x <- 0
-while (x < length(EW_2020)) {
-  x <- x+1
-  nombre <- names(EW_2020[x])
-  EW_2020[[x]]$indv <- nombre
-  if((names(EW_2020[x]) == "Qc18.20") | (names(EW_2020[x]) == "Qc19.20") | (names(EW_2020[x]) == "Qc26.20") | (names(EW_2020[x]) == "Qc47.20") | (names(EW_2020[x]) == "Qc52.20")){EW_2020[[x]]$treatment <- "drought" }else{
-    EW_2020[[x]]$treatment <- "control"}
-}
-rm(x)
 
-EW_2020 <- lapply(EW_2020, function(x){x[c("indv", 'Area', 'Feret', "treatment")]})
+x$treatment <- ifelse(x$indv %in% control, "control", "drought" )
+x$Area_Feret <- 0.785*(x$Feret^2)
 
-EW_2020_df <- do.call(rbind.data.frame, EW_2020)
-
-ggplot(data =EW_2020_df, aes(x= treatment, y= Area))+
+print(ggplot(data =x, aes(x= treatment, y= Area_Feret))+
   geom_violin()+
-  geom_point()
+  geom_point())
+return(x)
+})
 
-anova_area <- aov(data =EW_2020_df, Area~ treatment )
-summary(anova_area)
+#elimino los valores anomalos
+LW_EW$LW$Area_Feret <- ifelse(LW_EW$LW$Area_Feret >= 10, NA, LW_EW$LW$Area_Feret)
 
-EW_vessel_treatment <- split(EW_2020_df, EW_2020_df$treatment)
+##lo grafico
+lapply(LW_EW, function(x){
 
-##2021 EW
-setwd("C:/Minicores/Qca_Bruto/ImageJ/Tablas/l19-1-2022")
-name_documents <- list.files(pattern = '*.csv') ##hace una lista con todos los nombres de archivos csv de la carpeta
-Qca2021 <- lapply(name_documents, read_delim, delim = ',') #se abren los documentos seleccionados
-names(Qca2021) <- name_documents #conecta los nombre de la lista con los nombres de los documentos
+print(ggplot(data =x, aes(x= treatment, y= Area_Feret))+
+  geom_violin()+
+  geom_point())
 
-EW_2021 <- list("Qc2.21" = Qca2021$a2QcC19E22.csv[c(1,9,11,12,14,16,17,24,28,29,31,35,38,43,45), ],"Qc3.21" = Qca2021$b3QcC19E22.csv[c(1,29,30,35,55,58,59), ], "Qc5.21" =Qca2021$c5QcC19E22.csv[c(1,6,13,15,19,24,32,37,39,40), ], "Qc9.21" = Qca2021$d9QcC19E22.csv[c(18,27), ],"Qc18.21" = Qca2021$h18QcS19E22.csv[c(19,21,23,32,36), ],"Qc19.21" = Qca2021$i19QcS19E22.csv[c(1,23,36), ],"Qc30.21" = Qca2021$j30QcS19E22.csv[c(2,9,16,21,25), ], "Qc36.21" = Qca2021$k36QcC19E22.csv[c(1,6), ], "Qc40.21" = Qca2021$m40QcC19E22.csv[c(1,16,29), ], "Qc44.21" = Qca2021$n44QcC19E22.csv[c(5,10,19,42), ],"Qc47.21" = Qca2021$o47QcS19E22.csv[c(1,3,4), ],"Qc52.21" = Qca2021$r52QcS19E22.csv[c(7,13,21,29), ]) #####se hace una lista con todos los vasos de EW del año 2021
+})
 
+####modelos
+modelo_EW <- lmer(data = as.data.frame(LW_EW$EW) , log(Area_Feret) ~treatment + (1|indv)+ (1|year)) ###le hago el logaritmo ya que los datos no son normales
+summary(modelo_EW) ######no hay diferencia entre tratamiento
+residuos <- residuals(modelo_EW)
+qqnorm(residuos)
+qqline(residuos)
+#######preguntar a ELI si lo hago con LMER o no #######################
 
-x <- 0
-while (x < length(EW_2021)) {
-  x <- x+1
-  nombre <- names(EW_2021[x])
-  EW_2021[[x]]$indv <- nombre
-  if((names(EW_2021[x]) == "Qc18.21") | (names(EW_2021[x]) == "Qc19.21") | (names(EW_2021[x]) == "Qc26.21") | (names(EW_2021[x]) == "Qc47.21") | (names(EW_2021[x]) == "Qc52.21")){EW_2021[[x]]$treatment <- "drought" }else{
-    EW_2021[[x]]$treatment <- "control"}
-}
-rm(x)
+aggregate(Area_Feret~ treatment,LW_EW$EW, mean )
+aggregate(Area_Feret~ treatment,LW_EW$EW, se )
 
-EW_2021 <- lapply(EW_2021, function(x){x[c("indv", 'Area', 'Feret', "treatment")]})
+modelo_LW <- lmer(data = as.data.frame(LW_EW$LW) , log(Area_Feret) ~treatment + (1|indv)) ###le hago el logaritmo ya que los datos no son normales
+summary(modelo_LW) ######no hay diferencia entre tratamiento
+residuos <- residuals(modelo_LW)
+qqnorm(residuos)
+qqline(residuos)
 
-EW_2021_df <- do.call(rbind.data.frame, EW_2021)
-
-ggplot(data =EW_2021_df, aes(x= treatment, y= as.numeric(Area)))+
-  geom_violin()
-
-anova_area <- aov(data =EW_2021_df, Area~ treatment )
-summary(anova_area)
-
-##junto los datos del 2020 y 2021
-
-EW20.21 <- rbind(EW_2020_df, EW_2021_df)
-
-EW20.21$Area_Feret <- 0.785*(EW20.21$Feret^2)
-ggplot(data =EW20.21, aes(x= treatment, y= Area_Feret))+
-  geom_boxplot()
-
-#######preguntar a lorena #######################
-qqnorm(EW20.21$Area)
-qqline(EW20.21$Area)
-shapiro.test(EW20.21$Area) ###no es normal
-hist(EW20.21$Area)
-
-
-skewness(EW20.21$Area, na.rm = TRUE) #veo que dispersion tiene los datos
-EW20.21$trans <- log10(EW20.21$Area) ##realizo la transformacion
-qqnorm(EW20.21$trans)
-qqline(EW20.21$trans)
-shapiro.test(EW20.21$trans) ###veo que mis datos ya son normales
-hist(EW20.21$trans)
-
-anova_area <- aov(data =EW20.21, Area~ treatment )
-summary(anova_area)
-
-aggregate(Area~ treatment,EW20.21, mean )
-aggregate(Area~ treatment,EW20.21, se )
-
+aggregate(Area_Feret~ treatment,LW_EW$LW, mean )
+aggregate(Area_Feret~ treatment,LW_EW$LW, se )
 
 ###numero de EW vessel por indv en el area
-Freqency_vessel <- as.data.frame(table(EW20.21$indv))
-Freqency_vessel$treatment <- ifelse(grepl( "Qc18", Freqency_vessel$Var1) | grepl( "Qc19", Freqency_vessel$Var1) | grepl( "Qc26", Freqency_vessel$Var1) | grepl( "Qc47", Freqency_vessel$Var1) | grepl( "Qc52", Freqency_vessel$Var1), "drought", "control" )
 
-ggplot(data =Freqency_vessel, aes(x= treatment, y= Freq))+
-  geom_violin()+
-  geom_point()
+#######tengo que juntar el area y dividirlo para saber la frecuencia de vasos de EW en el anillo
 
-qqnorm(Freqency_vessel$Freq)
-qqline(Freqency_vessel$Freq)
-shapiro.test(Freqency_vessel$Freq) ###veo que mis datos no son normales
-
-
-skewness(Freqency_vessel$Freq, na.rm = TRUE) #veo que dispersion tiene los datos
-Freqency_vessel$trans <- log10(Freqency_vessel$Freq) ##realizo la transformacion
-qqnorm(Freqency_vessel$trans)
-qqline(Freqency_vessel$trans)
-shapiro.test(Freqency_vessel$trans) ###veo que mis datos ya son normales
-hist(Freqency_vessel$trans)
+##data frame con el area del anillo
+Minicore20_21 <- list("year20" = Minicore_fielddata$Minicore_TRW$`2Feb21`, "year21" = Minicore_fielddata$Minicore_TRW$`19Ene22`)
+Minicore20_21 <- eliminar_filas_NA_lista(Minicore20_21, "N_vasos")
+Minicore20_21$year20$year <- 2020
+Minicore20_21$year21$year <- 2021
+Minicore20_21 <- lapply(Minicore20_21, function(x){
+  x$TRW_mean <- rowMeans(x[ ,names(x) %in% c("TRW (mm) arriba", "TRW (mm) centro", "TRW (mm) Abajo")], na.rm = T)
+  x <- x[c("indv", 'year', 'Plot', "Area","TRW_mean")]
+  return(x)
+})
+Minicore20_21 <- do.call(rbind.data.frame, Minicore20_21)
 
 
-anova_freqvessel <- aov(data =Freqency_vessel, trans~ treatment )
-summary(anova_freqvessel)
+########uno los datos anteriores para saber la densidad de vasos
 
-aggregate(Freq~ treatment,Freqency_vessel, mean )
-aggregate(Freq~ treatment,Freqency_vessel, se )
-
-##LW2020
-LW_2020 <- list("Qc2.20" = Qca2020$a2QcC4F21.csv[-c(1,2,3,5,7,20,8,13,19,10,25,30,36,39), ],"Qc3.20" = Qca2020$b3QcC_4F21.csv[-c(32,44, 48,49,20,42,34,14,41,43,35), ], "Qc5.20" =Qca2020$c5QcC4F21.csv[-c(10,21,23,32,43,57,64,57,62,60,38,50,53,20,25,35,54,63,58,52), ], "Qc8.20" = Qca2020$d8QcC4F21.csv[-c(1,3,9,18), ],"Qc9.20" = Qca2020$e9QcC4F21.csv[-c(4,7,19,33,38,48,51,55,54,56,20,14,8,10,12,16,25,20), ],"Qc10.20" = Qca2020$f10QcC4F21.csv[-c(7,18), ],"Qc18.20" = Qca2020$g18QcS4F21.csv[-c(8), ],"Qc19.20" = Qca2020$h19QcS4F21.csv[-c(1,3), ],"Qc26.20" = Qca2020$i26QcS4F21.csv[-c(1,19,30,31), ],"Qc30.20" = Qca2020$j30QcCSF21.csv[-c(14,30,42, 51,57,20,34,40,52,49,53,56,58,41,38), ], "Qc40.20" = Qca2020$k40QcC4F21.csv[-c(1,8,27), ], "Qc44.20" = Qca2020$l44QcC4F21.csv[-c(7,12,20,26,29), ],"Qc47.20" = Qca2020$m47QcS4F21.csv[-c(1,2,12,13,42,43), ],"Qc52.20" = Qca2020$n52QcS4F21.csv[-c(4,6,25,27,31,33,37,38,44), ]) #####se hace una lista con todos los vasos menos los de EW del año 2020
-
-
-x <- 0
-while (x < length(LW_2020)) {
-  x <- x+1
-  nombre <- names(LW_2020[x])
-  LW_2020[[x]]$indv <- nombre
-  if((names(LW_2020[x]) == "Qc18.20") | (names(LW_2020[x]) == "Qc19.20") | (names(LW_2020[x]) == "Qc26.20") | (names(LW_2020[x]) == "Qc47.20") | (names(LW_2020[x]) == "Qc52.20")){LW_2020[[x]]$treatment <- "drought" }else{
-    LW_2020[[x]]$treatment <- "control"}
-}
-rm(x)
-
-LW_2020 <- lapply(LW_2020, function(x){x[c("indv", 'Area', 'Feret', "treatment")]})
-
-LW_2020 <- do.call(rbind.data.frame, LW_2020)
-ggplot(LW_2020, aes(x= LW_2020$treatment, y=LW_2020$Area))+geom_boxplot()
-##LW2021
-
-LW_2021 <- list("Qc2.21" = Qca2021$a2QcC19E22.csv[-c(1,9,11,12,14,16,17,24,28,29,31,35,38,43,45), ],"Qc3.21" = Qca2021$b3QcC19E22.csv[-c(1,18,19,23,29,30,35,40,46,49,51,53,55,58,59,20,24,2,5,28,42,32), ], "Qc5.21" =Qca2021$c5QcC19E22.csv[-c(1,6,13,15,19,24,32,37,39,40), ], "Qc9.21" = Qca2021$d9QcC19E22.csv[-c(18,27), ],"Qc10.21" = Qca2021$e10QcC19E22.csv[-c(12,22,26,27,33), ],"Qc18.21" = Qca2021$h18QcS19E22.csv[-c(19,21,23,32,36), ],"Qc19.21" = Qca2021$i19QcS19E22.csv[-c(1,23,36), ],"Qc30.21" = Qca2021$j30QcS19E22.csv[-c(2,9,16,21,25), ], "Qc36.21" = Qca2021$k36QcC19E22.csv[-c(1,6), ], "Qc40.21" = Qca2021$m40QcC19E22.csv[-c(1,16,29), ], "Qc44.21" = Qca2021$n44QcC19E22.csv[-c(5,8,10,19,33,38,42,21,13,26,40,46), ],"Qc47.21" = Qca2021$o47QcS19E22.csv[-c(1,3,4), ],"Qc52.21" = Qca2021$r52QcS19E22.csv[-c(7,13,21,29), ]) #####se hace una lista con todos los vasos de EW del año 2021, ademas elimino los fallos que tiene en la lectura de algunos vasos de la LW
-
-
-x <- 0
-while (x < length(LW_2021)) {
-  x <- x+1
-  nombre <- names(LW_2021[x])
-  LW_2021[[x]]$indv <- nombre
-  if((names(LW_2021[x]) == "Qc18.21") | (names(LW_2021[x]) == "Qc19.21") | (names(LW_2021[x]) == "Qc26.21") | (names(LW_2021[x]) == "Qc47.21") | (names(LW_2021[x]) == "Qc52.21")){LW_2021[[x]]$treatment <- "drought" }else{
-    LW_2021[[x]]$treatment <- "control"}
-}
-rm(x)
-
-LW_2021 <- lapply(LW_2021, function(x){x[c("indv", 'Area', 'Feret', "treatment")]})
-
-LW_2021 <- do.call(rbind.data.frame, LW_2021)
-LW_2021$Area <- ifelse(LW_2021$Area > 0.8, NA, LW_2021$Area)
-LW_2021 <- LW_2021[complete.cases(LW_2021), ]
-ggplot(LW_2021, aes(x= as.factor(LW_2021$treatment), y= as.numeric(LW_2021$Area)))+geom_boxplot()
+EW_LW_N_vessels <- lapply(LW_EW, function(x){
+  x$indv_year <- paste(x$indv, "_", x$year)
+x <-  x[!duplicated(x$indv_year), ]
+x <- merge(x, Minicore20_21, by= c("year", "indv") )
+x$area_TRW <- x$Area.y
+x$vesseldensity <- x$N_vessels/x$area_TRW
+print(ggplot(data =x, aes(x= as.factor(year), y= vesseldensity, fill= treatment))+
+  geom_boxplot())
+return(x)
+})
 
 
 
-##junto los datos del 2020 y 2021
+modelo_EW <- lmer(data = as.data.frame(EW_LW_N_vessels$EW), log(vesseldensity) ~ treatment + (1|indv)) ###le hago el logaritmo ya que los datos no son normales
+summary(modelo_EW) ######no hay diferencia entre tratamientosummary(mPlotodelo_EW) ######no hay diferencia entre tratamiento
+residuos <- residuals(modelo_EW)
+qqnorm(residuos)
+qqline(residuos)
 
-LW20.21 <- rbind(LW_2020, LW_2021)
-LW20.21$Area_Feret <- 0.785*(LW20.21$Feret^2)
-LW20.21$Area_Feret <- ifelse(LW20.21$Area_Feret > 100, NA, LW20.21$Area_Feret)
-ggplot(data =LW20.21, aes(x= treatment, y= Area_Feret))+
-  geom_boxplot()
-
-qqnorm(LW20.21$Area_Feret)
-qqline(LW20.21$Area_Feret)
-shapiro.test(LW20.21$Area_Feret) ###no es normal
+aggregate(vesseldensity~ treatment,EW_LW_N_vessels$EW, mean )
+aggregate(vesseldensity~ treatment,EW_LW_N_vessels$EW, se )
 
 
-
-anova_area <- kruskal.test(data =LW20.21, Area_Feret~ treatment )
-anova_area
-
-aggregate(Area_Feret~ treatment,LW20.21, mean )
-aggregate(Area_Feret~ treatment,LW20.21, se )
+###############¿hago de mas años?
 
 
-###numero de LW vessel por indv en el area
-Freqency_vessel <- as.data.frame(table(LW20.21$indv))
-Freqency_vessel$treatment <- ifelse(grepl( "Qc18", Freqency_vessel$Var1) | grepl( "Qc19", Freqency_vessel$Var1) |  grepl( "Qc47", Freqency_vessel$Var1) | grepl( "Qc52", Freqency_vessel$Var1), "drought", "control" )
+modelo_LW<- lmer(data = as.data.frame(EW_LW_N_vessels$LW) , log(vesseldensity) ~ treatment + (1|indv)) ###le hago el logaritmo ya que los datos no son normales
+summary(modelo_LW) ######no hay diferencia entre tratamiento
+r2(modelo_LW)
+########revisarrrrr con Eli
 
-ggplot(data =Freqency_vessel, aes(x= treatment, y= Freq))+
-  geom_violin()
+residuos <- residuals(modelo_LW)
+qqnorm(residuos)
+qqline(residuos)
 
-aggregate(Freq~ treatment,Freqency_vessel, mean )
-aggregate(Freq~ treatment,Freqency_vessel, se )
-qqnorm(Freqency_vessel$Freq)
-qqline(Freqency_vessel$Freq)
-shapiro.test(Freqency_vessel$Freq)
-
-
-anova_freqvessel <- aov(data =Freqency_vessel, Freq~ treatment )
-summary(anova_freqvessel)
+aggregate(vesseldensity~ treatment,EW_LW_N_vessels$LW, mean )
+aggregate(vesseldensity~ treatment,EW_LW_N_vessels$LW, se )
 
 
 
 ###TRW
-TRW_2020 <- read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
-    sheet = "2Feb21")
-TRW_2021 <- read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
-    sheet = "19Ene22")
+Minicore20_21$treatment <- ifelse(Minicore20_21$indv %in% control, "control", "drought" )
 
-TRW20.21 <- list(TRW_2020, TRW_2021)
-
-TRW20.21 <- lapply(TRW20.21, function(x){
-   df <- x[!(is.na(x$N_vasos) |x$N_vasos == " ") ,  ] ###elimino las filas que no me afectan para este calculo
- 
- df <- df[, ! names(df) %in% c("N_anillos","N_vasos","Feret", "Area", "Inicio_EW", "Finca", "escala 1 microm"), drop = F]
- df$TRW_mean  <-  rowMeans(df[ ,names(df) %in% c("TRW (mm) arriba", "TRW (mm) centro", "TRW (mm) Abajo")], na.rm = T)
- return(df)
-})
-
-TRW_2020 <- as.data.frame(TRW20.21[1])
-TRW_2021 <- as.data.frame(TRW20.21[2])
-
-ggplot(data = TRW_2021, aes(x= Tratam, y= TRW_mean ))+
+ggplot(data = Minicore20_21, aes(x= treatment, y= TRW_mean ))+
   geom_boxplot()
 
-shapiro.test(TRW_2020$TRW_mean) ##son normales
-shapiro.test(TRW_2021$TRW_mean) ##son normales
-leveneTest(y =TRW_2020$TRW_mean, group =TRW_2020$Tratam, center = "median") ###no hay evidencias significativas de que las varianzas sean diferentes , se cumple el supuesto de homogeneidad
-leveneTest(y =TRW_2021$TRW_mean, group =TRW_2021$Tratam, center = "median")
+summary(lmer(data = Minicore20_21, TRW_mean ~ treatment + year + (1|indv)))
 
-TRW_2020_anova <- aov(data = TRW_2020, TRW_mean ~ Tratam + Plot)
-summary(TRW_2020_anova)
+aggregate(TRW_mean~ treatment + year,Minicore20_21, mean )
+aggregate(TRW_mean~ treatment + year,Minicore20_21, se )
 
-TRW_2021_anova <- aov(data = TRW_2021, TRW_mean ~ Tratam + Plot)
-summary(TRW_2021_anova)
-
-aggregate(TRW_mean~ Tratam,TRW_2020, mean )
-aggregate(TRW_mean~ Tratam,TRW_2020, se )
-aggregate(TRW_mean~ Tratam,TRW_2021, mean )
-aggregate(TRW_mean~ Tratam,TRW_2021, se )
 
 #DBH y H
-DBH_H <- read_ods("C:/Minicores/R_analisis/Datos_Pie.ods")
 
 
-DBH_anova <- aov(data = DBH_H, `DBH_(cm)` ~ Tratam + Plot)
-summary(DBH_anova) ##no hay diferencias
+DBH_model <-  lmer(data = as.data.frame(Minicore_fielddata$Datos_pie), `DBH_(cm)` ~ Tratam + (1|Plot))
+summary(DBH_model) ##no hay diferencias
 
-DBH_anova <- aov(data = DBH_H,  `H_(cm)` ~ Tratam + Plot)
-summary(DBH_anova) ##no hay diferencias
+H_model <- lmer(data = as.data.frame(Minicore_fielddata$Datos_pie),  `H_(cm)` ~ Tratam + (1|Plot))
+summary(H_model) ##no hay diferencias
 
-aggregate(`DBH_(cm)`~ Tratam, DBH_H, mean )
-aggregate(`DBH_(cm)` ~ Tratam,DBH_H, se )
-aggregate( `H_(cm)`~ Tratam,DBH_H, mean )
-aggregate( `H_(cm)`~ Tratam,DBH_H, se )
+aggregate(`DBH_(cm)`~ Tratam, as.data.frame(Minicore_fielddata$Datos_pie), mean )
+aggregate(`DBH_(cm)` ~ Tratam,as.data.frame(Minicore_fielddata$Datos_pie), se )
+aggregate(`H_(cm)`~ Tratam, as.data.frame(Minicore_fielddata$Datos_pie), mean )
+aggregate(`H_(cm)` ~ Tratam,as.data.frame(Minicore_fielddata$Datos_pie), se )
 
 ###ray area
-Ray_area <- read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
-    sheet = "ray_area")
+Ray_area <- as.data.frame(Minicore_fielddata$Minicore_TRW$ray_area)
 
 Ray_area <- Ray_area[!(is.na(Ray_area$Codigo) |Ray_area$Codigo == " ") ,  ] ###elimino las filas que no me afectan para este calculo
 
-ggplot()+ geom_boxplot(data = Ray_area, aes(x= Tratam, y= Ray_2021)) ###pregunta, ¿se puede mezclar estos datos?
+Ray_area <- pivot_longer(data = Ray_area, cols = c("Ray_2020", "Ray_2021"), names_to = "year", values_to = "Ray_area")
+
+ggplot()+ geom_boxplot(data = Ray_area, aes(x= Tratam, y= Ray_area))
 
 
-anova_ray_2020 <- aov(data= Ray_area, Ray_2020 ~ Tratam + Plot)
-summary(anova_ray_2020)
+ray_model <- lmer(data= Ray_area, Ray_area ~ Tratam + (1|Árbol)) #########esta bien el random?
+summary(ray_model)
+r2(ray_model)
+########revisarrrrr con Eli
 
-anova_ray_2021 <- aov(data= Ray_area, Ray_2021 ~ Tratam + Plot)
-summary(anova_ray_2021)
+residuos <- residuals(ray_model)
+qqnorm(residuos)
+qqline(residuos)
 
-aggregate(Ray_2020~ Tratam, Ray_area, mean )
-aggregate(Ray_2020~ Tratam, Ray_area, se )
-aggregate(Ray_2021~ Tratam, Ray_area, mean )
-aggregate(Ray_2021~ Tratam, Ray_area, se )
+aggregate(Ray_area~ Tratam, Ray_area, mean )
+aggregate(Ray_area~ Tratam, Ray_area, se )
 
-###prueba para poner junto 2020 y 2021
-ray2020 <- data.frame(  "Plot" = Ray_area$Plot, "Tratam" =Ray_area$Tratam  , "Codigo" = Ray_area$Codigo,    "Ray_2020" = Ray_area$Ray_2020 )
-ray2021 <- data.frame(  "Plot" = Ray_area$Plot, "Tratam" =Ray_area$Tratam  , "Codigo" = Ray_area$Codigo,    "Ray_2020" = Ray_area$Ray_2021 )
-ray_20.21 <- rbind(ray2020,ray2021)
-
-
-shapiro.test(ray_20.21$Ray_2020)
-qqnorm(ray_20.21$Ray_2020)
-qqline(ray_20.21$Ray_2020) ##no son normales los datos pero por muy poco, utilizo anova
-
-
-anova_ray <- aov(data= ray_20.21, Ray_2020 ~ Tratam + Plot)
-summary(anova_ray)
-
-aggregate(Ray_2020~ Tratam, ray_20.21, mean )
-aggregate(Ray_2020~ Tratam, ray_20.21, se )
 
 ###EW vulnerability index
-EW_2020_feret <-lapply(EW_2020, function(x){  Feret_converter(x, "mm")}) ##primero convierto cada vaso en las variables relacionadas con Feret
-EW_2021_feret <-lapply(EW_2021, function(x){  Feret_converter(x, "mm")})
 
-Data_2020 <- read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
-    sheet = "2Feb21")
-Data_2021 <- read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
-     sheet = "19Ene22")
+LW_EW_AQ <- lapply(LW_EW, function(x){
+  x$Feret <- x$Feret*1000
+  x$D5 <- x$Feret^5
+  x$D4 <- x$Feret^4
+  x$D4_metros <- x$D4/(10^24)
+  x <- split(x, x$year) #########separo por año y por individuo
+  x <- lapply(x, function(n){n <- split(n, n$indv)
+  return(n)}) 
 
-EW_20.21_feret <- list("EW_2020_feret" =EW_2020_feret,"EW_2021_feret" = EW_2021_feret) ##junto los datos
-Data_20.21 <- list("Data_2020"= Data_2020, "Data_2021" = Data_2021)
-
-Data_20.21 <- lapply(Data_20.21, function(x){
-  df <- x[!(is.na(x$Area) |x$Area == " ") ,  ] 
-  df <- df[ ,c("indv", "Area")]
-  names(df)[2] <- "year_Total_area"
-return(df)
-}) ##modifico los datos para que contengan las mismas columnas
-
-
-EW_20.21_feret <- lapply(EW_20.21_feret, function(x){
-  z <- 0
-while(z < length(x)){
-  z <- z +1
-  x[[z]]$indv <- names(x[z])
-} ###hace que nos cree la columna de individuos
-
-df <- bind_rows(x) ###concentro todos los datos en un data frame
-
-df[c("1", "2")] <-  str_split_fixed(df$indv, ".20" , 2)
-df[c("1", "indv")] <- str_split_fixed(df$"1", ".21" , 2)
-df[c("1", "indv")] <- str_split_fixed(df$"1", "Qc" , 2)
-df <- df[ ,!names(df) %in% c("1", "2")]
-df$treatment <- ifelse(grepl( "18", df$indv) | grepl( "19", df$indv) |  grepl( "26", df$indv) |  grepl( "30", df$indv) | grepl( "47", df$indv) | grepl( "52", df$indv), "drought", "control" )
-return(df)
-}) ##hago la modificacion en la fila de indv para que tenga el identificador del individuo
-
-
-EW_20.21_feret$EW_2020_feret <-  merge(EW_20.21_feret$EW_2020_feret, Data_20.21$Data_2020, by= c("indv", "indv")) ##se unen los datos de ambos data frames
-EW_20.21_feret$EW_2021_feret <-  merge(EW_20.21_feret$EW_2021_feret, Data_20.21$Data_2021, by= c("indv", "indv"))
-
-EW_20.21_vul_index <- lapply(EW_20.21_feret, function(x){
-  listas_xindv <-  split(x, x$indv)
-  
-  df <- lapply(listas_xindv, function(y){
-    y$n_vessel <- nrow(y)
-    y$vessel_frequency <- y$n/y$year_Total_area
-    y$vul_index <- y$Dmean/y$vessel_frequency
-    y$dh <- y$Sum.D5/y$Sum.D4
-    y$Kh <- ((pi*998.2071)/(128*10^-3))*y$Sum.D4meter
-    y <- data.frame("indv"= y$indv , "treatment"= y$treatment ,"vessel_frequency"= y$vessel_frequency, "vul_index"= y$vul_index, "dh"= y$dh, "kh" = y$Kh )
-    y <- y[1,]
+  x <- lapply(x, function(y){
+    y <- lapply(y, function(z){
+      z <- data.frame("indv" = unique(z$indv), "N_vessels" = unique(z$N_vessels), "totalvesselarea"= sum(z$Area_Feret), "sumD4"= sum(z$D4), "sumD5"= sum(z$D5), "sumD4_metros"= sum(z$D4_metros), "year"= unique(z$year), "treatment"= unique(z$treatment), "Dmin_microm" = min(z$Feret) )})
     return(y)
   })
-  
-  df <- do.call(rbind, Map(data.frame, df))
-  return(df)
-}) ##se calcula el EW vessel freq y el indice de vulnerabilidad
+  return(x)
+}) ######calculo D4 y su suma en todos los casos que tengo de muestreo
 
 
+LW_EW_AQ <- lapply(LW_EW_AQ, function(x){
+  x <- lapply(x, function(y){
+    y <- lapply(y, function(z){
+      z <- merge(z, Minicore20_21, by= c("indv", "year", "treatment"))
 
-EW_20.21_vul_index <- rbind(EW_20.21_vul_index$EW_2020_feret, EW_20.21_vul_index$EW_2021_feret)
-
-EW_20.21_vul_index$vul_indexNA <- ifelse(EW_20.21_vul_index$vul_index > 0.3, NA, EW_20.21_vul_index$vul_index)
-shapiro.test(EW_20.21_vul_index$vul_indexNA)
-qqnorm(EW_20.21_vul_index$vul_indexNA)
-qqline(EW_20.21_vul_index$vul_indexNA) ##es muy parecida a la normal
-
-shapiro.test(EW_20.21_vul_index$vessel_frequency) ##es normal
-shapiro.test(EW_20.21_vul_index$dh) ##es normal
-
-ggplot()+ geom_boxplot(data= EW_20.21_vul_index, aes(x=as.factor(treatment), y= vul_indexNA))
-ggplot()+ geom_boxplot(data= EW_20.21_vul_index, aes(x=as.factor(treatment), y= vessel_frequency))
-ggplot()+ geom_boxplot(data= EW_20.21_vul_index, aes(x=as.factor(treatment), y= dh))
-ggplot()+ geom_boxplot(data= EW_20.21_vul_index, aes(x=as.factor(treatment), y= kh))
-
-
-
-anova_vulindex <- aov(data= EW_20.21_vul_index, vul_indexNA ~ treatment )
-summary(anova_vulindex)
-anova_vessfrq <- aov(data= EW_20.21_vul_index, vessel_frequency ~ treatment )
-anova_dh <- aov(data= EW_20.21_vul_index, dh ~ treatment )
-
-aggregate(vul_indexNA ~ treatment, EW_20.21_vul_index, mean )
-aggregate(vul_indexNA ~ treatment, EW_20.21_vul_index, se )
-
-aggregate(vessel_frequency ~ treatment, EW_20.21_vul_index, mean )
-aggregate(vessel_frequency ~ treatment, EW_20.21_vul_index, se )
-
-aggregate(dh ~ treatment, EW_20.21_vul_index, mean )
-aggregate(dh ~ treatment, EW_20.21_vul_index, se )
-
-summary(anova_vulindex)
-summary(anova_vessfrq)
-
-###LW vulnerability index
-LW_2020 <- split(LW_2020, LW_2020$indv)
-LW_2021 <- split(LW_2021, LW_2021$indv)
-
-LW_2020_feret <-lapply(LW_2020, function(x){  Feret_converter(x, "mm")}) ##primero convierto cada vaso en las variables relacionadas con Feret
-LW_2021_feret <-lapply(LW_2021, function(x){  Feret_converter(x, "mm")})
-
-
-LW_20.21_feret <- list("LW_2020_feret" =LW_2020_feret,"LW_2021_feret" = LW_2021_feret) ##junto los datos
-
-
-LW_20.21_feret <- lapply(LW_20.21_feret, function(x){
-  z <- 0
-while(z < length(x)){
-  z <- z +1
-  x[[z]]$indv <- names(x[z])
-} ###hace que nos cree la columna de individuos
-
-df <- bind_rows(x) ###concentro todos los datos en un data frame
-
-df[c("1", "2")] <-  str_split_fixed(df$indv, ".20" , 2)
-df[c("1", "indv")] <- str_split_fixed(df$"1", ".21" , 2)
-df[c("1", "indv")] <- str_split_fixed(df$"1", "Qc" , 2)
-df <- df[ ,!names(df) %in% c("1", "2")]
-df$treatment <- ifelse(grepl( "18", df$indv) | grepl( "19", df$indv) |  grepl( "26", df$indv) |  grepl( "30", df$indv) | grepl( "47", df$indv) | grepl( "52", df$indv), "drought", "control" )
-return(df)
-}) ##hago la modificacion en la fila de indv para que tenga el identificador del individuo
-
-
-LW_20.21_feret$LW_2020_feret <-  merge(LW_20.21_feret$LW_2020_feret, Data_20.21$Data_2020, by= c("indv", "indv")) ##se unen los datos de ambos data frames
-LW_20.21_feret$LW_2021_feret <-  merge(LW_20.21_feret$LW_2021_feret, Data_20.21$Data_2021, by= c("indv", "indv"))
-
-LW_20.21_vul_index <- lapply(LW_20.21_feret, function(x){
-  listas_xindv <-  split(x, x$indv)
-  
-  df <- lapply(listas_xindv, function(y){
-    y$n_vessel <- nrow(y)
-    y$vessel_frequency <- y$n/y$year_Total_area
-    y$vul_index <- y$Dmean/y$vessel_frequency
-    y$dh <- y$Sum.D5/y$Sum.D4
-    y$Kh <- ((pi*998.2071)/(128*10^-3))*y$Sum.D4meter
-    y <- data.frame("indv"= y$indv , "treatment"= y$treatment ,"vessel_frequency"= y$vessel_frequency, "vul_index"= y$vul_index, "dh" = y$dh, "kh" = y$Kh  )
-    y <- y[1,]
+      z <- data.frame("indv" = z$indv, "year" = z$year, "treatment"= z$treatment,"N_vessels"= z$N_vessels ,"totalvesselarea"= z$totalvesselarea, "meanvesselarea"= z$totalvesselarea/ z$N_vessels, "vesselfrequency"= z$N_vessels/ z$Area, "dh"= z$sumD5/z$sumD4, "Kh"= (((3.14*998.2071)/(128*0.001002))*z$sumD4_metros), "Totalringarea"= z$Area, "vulindex" = z$Dmin/z$N_vessels)
+      z$Ks <- z$Kh/z$Totalringarea
+      
+      return(z)
+    })
     return(y)
   })
-  
-  df <- do.call(rbind, Map(data.frame, df))
-  return(df)
-}) ##se calcula el LW vessel freq y el indice de vulnerabilidad
+  return(x)
+}) ######calculo del dh, kh, ks, vessel frequency y meanvesselarea
 
-LW_20.21_vul_index <- do.call(rbind, Map(data.frame, LW_20.21_vul_index))
-LW_20.21_vul_index$dh[LW_20.21_vul_index$dh >= 20] <- 0.07
+LW_EW_AQ <- lapply(LW_EW_AQ, function(x){
+  x <- lapply(x, function(y){y <- do.call(rbind.data.frame, y)
+  return(y)} )
+  x <- do.call(rbind.data.frame, x)
+    
+    return(x)
+}) #####lo uno todo en un data frame
 
-LW_20.21_vul_index$trans_vul <- ifelse(LW_20.21_vul_index$vul_index > 0.1, NA, LW_20.21_vul_index$vul_index)
-shapiro.test(LW_20.21_vul_index$vul_index)
-qqnorm(LW_20.21_vul_index$vul_index)
-qqline(LW_20.21_vul_index$vul_index) ##es muy parecida a la normal
+LW_EW_AQ$LW <- LW_EW_AQ$LW[complete.cases(LW_EW_AQ$LW), ]
 
-shapiro.test(LW_20.21_vul_index$vessel_frequency) ##es normal
-qqnorm(LW_20.21_vul_index$vessel_frequency)
-qqline(LW_20.21_vul_index$vessel_frequency) ##no es normal
+ggplot()+ geom_boxplot(data= as.data.frame(LW_EW_AQ$EW) , aes(x=as.factor(treatment), y= vulindex))
+ggplot()+ geom_boxplot(data= as.data.frame(LW_EW_AQ$LW) , aes(x=as.factor(treatment), y= vulindex))
+ggplot()+ geom_boxplot(data= as.data.frame(LW_EW_AQ$EW) , aes(x=as.factor(treatment), y=  Ks))
+ggplot()+ geom_boxplot(data= as.data.frame(LW_EW_AQ$LW) , aes(x=as.factor(treatment), y= Ks))
+ggplot()+ geom_boxplot(data= as.data.frame(LW_EW_AQ$EW) , aes(x=as.factor(treatment), y=  Kh))
+ggplot()+ geom_boxplot(data= as.data.frame(LW_EW_AQ$LW) , aes(x=as.factor(treatment), y= Kh))
 
-skewness(LW_20.21_vul_index$vessel_frequency, na.rm = TRUE) #veo que dispersion tiene los datos
-LW_20.21_vul_index$trans_vesfreq <- log10(LW_20.21_vul_index$vessel_frequency +1) ##realizo la transformacion
-qqnorm(LW_20.21_vul_index$trans_vesfreq)
-qqline(LW_20.21_vul_index$trans_vesfreq)
-shapiro.test(LW_20.21_vul_index$trans_vesfreq) ###veo que mis datos ya son normales
+vulindex_model_EW <- lm(data= as.data.frame(LW_EW_AQ$EW), log(vulindex) ~ treatment )
+vulindex_model_LW <- lm(data= as.data.frame(LW_EW_AQ$LW), log(vulindex) ~ treatment )
+Ks_model_EW <- lm(data= as.data.frame(LW_EW_AQ$EW), log(Ks) ~ treatment)
+Ks_model_LW <- lm(data= as.data.frame(LW_EW_AQ$LW), log(Ks) ~ treatment )
+Kh_model_EW <- lm(data= as.data.frame(LW_EW_AQ$EW), log(Kh) ~ treatment)
+Kh_model_LW <- lm(data= as.data.frame(LW_EW_AQ$LW), log(Kh) ~ treatment)
 
-shapiro.test(LW_20.21_vul_index$dh) ##es normal
+summary(vulindex_model_EW)
+summary(vulindex_model_LW)
+summary(Ks_model_EW)
+summary(Ks_model_LW)
+summary(Kh_model_EW)
+summary(Kh_model_LW)
+residuos <- residuals(vulindex_model_EW)
+qqnorm(residuos)
+qqline(residuos)
 
-LW_20.21_vul_index$dh <- ifelse(LW_20.21_vul_index$dh >40, NA, LW_20.21_vul_index$dh )
+#####patogenos
+Minicore_fielddata$phytophthora <- split(Minicore_fielddata$phytophthora, Minicore_fielddata$phytophthora$Species)
+Minicore_fielddata$phytophthora$Alcornoque <- NULL
 
-ggplot()+ geom_boxplot(data= LW_20.21_vul_index, aes(x=as.factor(treatment), y= dh))
-ggplot()+ geom_boxplot(data= LW_20.21_vul_index, aes(x=as.factor(treatment), y= trans_vul))
-ggplot()+ geom_boxplot(data= LW_20.21_vul_index, aes(x=as.factor(treatment), y= trans_vesfreq))
+Minicore_fielddata$phytophthora <- data.frame("indv" = Minicore_fielddata$phytophthora$Quejigo$Tree, "Pci"= Minicore_fielddata$phytophthora$Quejigo$Pci2020, "treatment"= Minicore_fielddata$phytophthora$Quejigo$Drought, "Plot" = Minicore_fielddata$phytophthora$Quejigo$Block )
+ggplot(data = Minicore_fielddata$phytophthora, aes(x=treatment, y=Pci))+ geom_point()
 
-aggregate(trans_vesfreq ~ treatment, LW_20.21_vul_index, mean )
-aggregate(trans_vesfreq ~ treatment, LW_20.21_vul_index, se )
+modelo_phytophthora <-  lmer(data = Minicore_fielddata$phytophthora, Pci ~ treatment+ (1|Plot))
+summary(modelo_phytophthora)
 
-aggregate(dh ~ treatment, LW_20.21_vul_index, mean )
-aggregate(dh ~ treatment, LW_20.21_vul_index, se )
-
-aggregate(trans_vul ~ treatment, LW_20.21_vul_index, mean )
-aggregate(trans_vul ~ treatment, LW_20.21_vul_index, se )
-
-anov_LW_20.21_vul_index <- aov(trans_vul ~ treatment, data = LW_20.21_vul_index)
-summary(anov_LW_20.21_vul_index)
-
-anov_LW_20.21_vul_index <- aov(trans_vesfreq ~ treatment, data = LW_20.21_vul_index)
-summary(anov_LW_20.21_vul_index)
-
-anov_LW_20.21_dh <- aov(dh ~ treatment, data = LW_20.21_vul_index)
-summary(anov_LW_20.21_dh)
-
-##total area
-area_2020 <-  lapply(Qca2020, function(x) { x$area_total <-  sum(x$Area)
-return(x)}) 
-x <- 0
-while (x < length(area_2020)) {
-  x <- x+1
-  nombre <- names(area_2020[x])
-  area_2020[[x]]$indv <- nombre
-  if((names(area_2020[x]) == "g18QcS4F21.csv") | (names(area_2020[x]) == "h19QcS4F21.csv") | (names(area_2020[x]) == "i26QcS4F21.csv") | (names(area_2020[x]) == "m47QcS4F21.csv") | (names(area_2020[x]) == "n52QcS4F21.csv")){area_2020[[x]]$treatment <- "drought" }else{
-    area_2020[[x]]$treatment <- "control"}
-}
-rm(x)
-area_2020 <-  lapply(area_2020, function(x){x <- data.frame("Area"= x$area_total, "indv"= x$indv , "treatment" = x$treatment)
-return(x)}) 
-
-area_2020 <- do.call(rbind, Map(data.frame, area_2020))
-area_2020 <-   area_2020[!duplicated(area_2020$Area), ]
-area_2020$Area <- ifelse(area_2020$indv == "e9QcC4F21.csv",NA, area_2020$Area)
-
-Area_2021 <- lapply(Qca2021, function(x) { 
-  x$Area <- as.numeric(x$Area)
-  x$area_total <-  sum(x$Area)
-return(x)}) 
-x <- 0
-while (x < length(Area_2021)) {
-  x <- x+1
-  nombre <- names(Area_2021[x])
-  Area_2021[[x]]$indv <- nombre
-  if((names(Area_2021[x]) == "h18QcS19E22.csv") | (names(Area_2021[x]) == "i19QcS19E22.csv") | (names(Area_2021[x]) == "j30QcS19E22.csv") | (names(Area_2021[x]) == "o47QcS19E22.csv") | (names(Area_2021[x]) == "r52QcS19E22.csv")){Area_2021[[x]]$treatment <- "drought" }else{
-    Area_2021[[x]]$treatment <- "control"}
-}
-rm(x)
-Area_2021 <-  lapply(Area_2021, function(x){x <- data.frame("Area"= x$area_total, "indv"= x$indv , "treatment" = x$treatment)
-return(x)}) 
-
-Area_2021 <- do.call(rbind, Map(data.frame, Area_2021))
-Area_2021 <-   Area_2021[!duplicated(Area_2021$Area), ]
-
-
-Area_2021.20 <- rbind(Area_2021, area_2020)
-ggplot()+ geom_boxplot(data = Area_2021.20, aes(x=treatment, y=Area))
-
-summary(aov(Area ~ treatment, data = Area_2021.20))
-
-aggregate(Area ~ treatment, Area_2021.20, mean )
-aggregate(Area ~ treatment, Area_2021.20, se )
-
+####usar la distribucion binomial negativa  usando glmmTMB para comparar?¿ es lo que suele usar lorena
+aggregate(Pci ~ treatment, Minicore_fielddata$phytophthora, mean )
+aggregate(Pci ~ treatment, Minicore_fielddata$phytophthora, se )
 ```
 
 ```{r Relacion_crecimiento clima todo el periodo de crecimiento con TRW bruto, include=FALSE}
@@ -4512,6 +4272,7 @@ season_climate_plots$Spring
 season_climate_plots$Summer
 
 ```
+
 
 
 
