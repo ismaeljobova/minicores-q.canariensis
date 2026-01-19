@@ -91,7 +91,7 @@ Qca2020_21 <- readRDS("Qca2020_21.rds")
 ###patogenos
 Minicore_fielddata$phytophthora <- read_xlsx("Patogenos_y_textura.xlsx", sheet = "Gamir")
 
-
+vessel_imageJ <- readRDS("vessel_Data.rds") ########datos de todos los vasos de imageJ
 ```
 
 ```{r clima, include=FALSE}
@@ -311,6 +311,8 @@ plot_grid(clima_plot$temp,clima_plot$prp,clima_plot$SPEI, ncol = 1)
 ```
 
 ```{r Phenology canariensis_EW, include=FALSE}
+
+##########PREGUNTA: ¿Hay cambios en la temporalidad de inicio de la EW?
 Qca_phenology <- Minicore_fielddata$Minicore_TRW
 Qca_phenology <- Qca_phenology[ names(Qca_phenology) != "ray_area"]
 
@@ -364,18 +366,17 @@ Qca_phenology_EW <- rbind(Qca_phenology_EW$`0`, Qca_phenology_EW$`1`)###########
 
 
 ##########me sigue generando errores. Solo me converge con indv como random, deberiamos de revisarlo juntos.  Por ahora pongo solo indv como random
+###Para responder la pregunta, usaria el modelo 5 ¿Que opinais?
 
 
-modelo1 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1) + scale(H_.cm.) + scale(Diametro_copa_.cm.) + Tratam + (1|indv) ,  family = binomial) ##29.0
-summary(modelo1)$varcor
-modelo2 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1) + scale(Diametro_copa_.cm.)+ Tratam  + (1|indv), family = binomial) ##36.9
-modelo3 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1) + scale(H_.cm.)+ Tratam  + (1|indv), family = binomial)
-modelo4 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1) + scale(H_.cm.)*scale(Diametro_copa_.cm.)+ Tratam  + + (1|indv), family = binomial) ##35.4 
-modelo5 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1)+ Tratam  + (1|indv), family = binomial) #30.2
-
+# modelo1 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ date_1 + H_.cm. + Diametro_copa_.cm. + Tratam + (1|indv),  family = binomial) ##29.0
+# modelo2 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1) + scale(Diametro_copa_.cm.)+ Tratam  + (1|indv), family = binomial) ##36.9
+# modelo3 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1) + scale(H_.cm.)+ Tratam  + (1|indv) , family = binomial)
+# modelo4 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1) + scale(H_.cm.)*scale(Diametro_copa_.cm.)+ Tratam  + + (1|indv), family = binomial) ##35.4 
+modelo5 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1) +Tratam +(1|indv)  , family = binomial) #30.2
 #########no me converge el modelo 1 y el 4, por lo cual no los utilizaré
 
-model.sel(modelo1, modelo2, modelo3, modelo5) ###mejor modelo es el modelo 1
+# model.sel(modelo1, modelo2, modelo3, modelo5) ###mejor modelo es el modelo 1
 
 
 r2(modelo5)
@@ -422,21 +423,23 @@ ggplot(data = df, aes(x = date_1, y=fit, colour = Tratam ))+
 ```
 
 ```{r Phenology canariensis_LW, include=FALSE}
+
+##########PREGUNTA A RESPONDER: ¿Hay cambios en la temporalidad de inicio de los vasos de LW?
 rm(modelo1, modelo2, modelo3, modelo4, modelo5, Qca_phenology_EW)
 ##modelos
 Qca_phenology_LW <- split(Qca_phenology, Qca_phenology$Inicio_LW_bin )
 Qca_phenology_LW <- rbind(Qca_phenology_LW$`0`, Qca_phenology_LW$`1`)############Elimino los NA de esta columna
 
 ##pasa lo mismo que en el apartado anterior pero con la particularidad de que ahora el r2 de los modelos genera issingular y que Conditional R2: 1.000 lo cual es imposible
+##para responder la pregunta uso solo el modelo 5
 
-modelo1 <- glmer(data = Qca_phenology_LW, Inicio_LW_bin ~ scale(date_1) + scale(H_.cm.) + scale(Diametro_copa_.cm.) + Tratam  + (1|indv), family = binomial) ##56.3
-summary(modelo1)$varcor
-modelo2 <- glmer(data = Qca_phenology_LW, Inicio_LW_bin ~ scale(date_1) + scale(Diametro_copa_.cm.)+ Tratam  + (1|indv), family = binomial) ##54.3
-modelo3 <- glmer(data = Qca_phenology_LW, Inicio_LW_bin ~ scale(date_1) + scale(H_.cm.)+ Tratam  + (1|indv), family = binomial) ##53.9
-modelo4 <- glmer(data = Qca_phenology_LW, Inicio_LW_bin ~ scale(date_1) + scale(H_.cm.)*scale(Diametro_copa_.cm.)+ Tratam  + (1|indv), family = binomial) ##58.7
+# modelo1 <- glmer(data = Qca_phenology_LW, Inicio_LW_bin ~ scale(date_1) + scale(H_.cm.) + scale(Diametro_copa_.cm.) + Tratam  + (1|indv), family = binomial) ##56.3
+# modelo2 <- glmer(data = Qca_phenology_LW, Inicio_LW_bin ~ scale(date_1) + scale(Diametro_copa_.cm.)+ Tratam  + (1|indv), family = binomial) ##54.3
+# modelo3 <- glmer(data = Qca_phenology_LW, Inicio_LW_bin ~ scale(date_1) + scale(H_.cm.)+ Tratam  + (1|indv), family = binomial) ##53.9
+# modelo4 <- glmer(data = Qca_phenology_LW, Inicio_LW_bin ~ scale(date_1) + scale(H_.cm.)*scale(Diametro_copa_.cm.)+ Tratam  + (1|indv), family = binomial) ##58.7
 modelo5 <- glmer(data = Qca_phenology_LW, Inicio_LW_bin ~ scale(date_1)+ Tratam  + (1|indv), family = binomial) #52.7
 
-model.sel(modelo1, modelo3, modelo4, modelo5) ###mejor modelo es el modelo 5
+# model.sel(modelo1, modelo3, modelo4, modelo5) ###mejor modelo es el modelo 5
 
 
 r2(modelo5) ##########esto no es normal que me salga issingular en el r2
@@ -465,7 +468,7 @@ ggplot(data = df, aes(x = date_1, y=fit, colour = Tratam ))+
   scale_fill_manual(values= c("blue", "red"))
 
 
-rm(modelo1,modelo2, modelo3, modelo4, modelo5, Qca_phenology_LW)
+rm(modelo5, Qca_phenology_LW)
 ```
 
 ```{r Análisis de 2020/2021 Qca, include=FALSE}
@@ -845,8 +848,7 @@ TRW_2021 <- lapply(TRW_2021, function(x){
   z <- 1 ###empiezo en el 2 ya que fila 1 no se puede comparar con la 0
   while(z < length(x$indv)){
     z <- z+1
-    x$TRW_propTRW2021_mod <- x$TRW_propTRW2021
-    if( (x$TRW_propTRW2021_mod[z]/x$TRW_propTRW2021_mod[z-1]) < 0.8){x$TRW_propTRW2021_mod[z] <- x$TRW_propTRW2021_mod[z-1]}  }
+    x$TRW_propTRW2021_mod <- x$TRW_propTRW2021  }
   return(x)
 }) #############la nueva columna "TRW_propTRW2021_mod" significa: si el valor de TRW en cierta fecha es menor que la anterior fecha a un 80%, me posiciona el valor anterior, así identifico mejor los valores anomalos
 
@@ -880,443 +882,128 @@ ggplot(TRW_2021, aes(x=date, y=TRWday_micras, colour = treatment))+
   geom_point()+
   geom_smooth()
 
+
 ########modelos de crecimiento
-
-
-##########saber cuanto a crecido y en qué fechas para saber los vasos nuevos en cada fecha
-
-
-```
-
-```{r Todos los Cortes_Qca, include=FALSE}
-####1-ABRIL-2021
-D1Abr21 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
-    sheet = "1Abr2021") ###abro el archivo
-D1Abr21 <- D1Abr21[!is.na(D1Abr21$Codigo),] ###elimino los individuos que no se han medido
-D1Abr21 <- D1Abr21[!(D1Abr21$N_vasos <= 0),] ###elimino los individuos que se han medido pero no hay crecimiento anual
-
-
-names <- D1Abr21$indv
-path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/c1-4-2021"
-setwd(path)
-name_documents <- list.files(pattern = '*.csv')
-c1A21 <- lapply(name_documents, read_delim, delim = ',')
-
-names(c1A21) <- names
-c1A21 <- lapply(c1A21, function(x) Feret_converter_analisistemporal(x,"mm"))
-
-c1A21 <- bind_rows(c1A21) 
-rownames(c1A21) <- names 
-c1A21$indv <- names
-D1Abr21 <- mutate(D1Abr21, TRW_mean = rowMeans(select(D1Abr21, 
-                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
-D1Abr21 <- select_columns(D1Abr21)
-c1A21 <- merge(c1A21, D1Abr21, by= c("indv", "indv"))
-c1A21 <- Vessel_measurement(c1A21)
-
-
-####15-Abril-2021
-
-D15A21 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
-    sheet = "15Abr2021")
-D15A21 <- D15A21[!is.na(D15A21$Codigo),]
-D15A21 <- D15A21[!(D15A21$N_vasos <= 0),]
-
-names <- D15A21$indv
-path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/d15-4-2021"
-setwd(path)
-name_documents <- list.files(pattern = '*.csv')
-DD15A21 <- lapply(name_documents, read_delim, delim = ',')
-
-
-names(DD15A21) <- names
-DD15A21 <- lapply(DD15A21, function(x) Feret_converter_analisistemporal(x,"mm"))
-DD15A21 <- bind_rows(DD15A21) 
-rownames(DD15A21) <- names 
-DD15A21$indv <- names
-D15A21 <- mutate(D15A21, TRW_mean = rowMeans(select(D15A21, 
-                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
-D15A21 <- select_columns(D15A21)
-DD15A21 <- merge(DD15A21, D15A21, by= c("indv", "indv"))
-DD15A21 <- Vessel_measurement(DD15A21)
-
-
-##29-Abril-2021
-
-D29Abr21 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
-    sheet = "29Abr21")
-D29Abr21 <- D29Abr21[!is.na(D29Abr21$Codigo),]
-D29Abr21 <- D29Abr21[!(D29Abr21$N_vasos <= 0),]
-
-
-
-names <- D29Abr21$indv
-path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/e29-4-2021"
-setwd(path)
-name_documents <- list.files(pattern = '*.csv')
-e29Abr21<- lapply(name_documents, read_delim, delim = ',')
-names(e29Abr21) <- names
-e29Abr21 <- lapply(e29Abr21, function(x) Feret_converter_analisistemporal(x,"mm"))
-e29Abr21 <- bind_rows(e29Abr21) 
-rownames(e29Abr21) <- names 
-e29Abr21$indv <- names
-D29Abr21 <- mutate(D29Abr21, TRW_mean = rowMeans(select(D29Abr21, 
-                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
-D29Abr21 <- select_columns(D29Abr21)
-e29Abr21 <- merge(e29Abr21, D29Abr21, by= c("indv", "indv"))
-e29Abr21 <- Vessel_measurement(e29Abr21)
-
-
-##10-Junio-2021
-
-D10J211 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
-    sheet = "10Jun2021")
-D10J211 <- D10J211[!is.na(D10J211$Codigo),]
-D10J211 <- D10J211[!(D10J211$N_vasos <= 0),]
-
-names <- D10J211$indv
-path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/f10-6-2021"
-setwd(path)
-name_documents <- list.files(pattern = '*.csv')
-f10J211<- lapply(name_documents, read_delim, delim = ',')
-names(f10J211) <- names
-f10J211 <- lapply(f10J211, function(x) Feret_converter_analisistemporal(x,"mm"))
-f10J211 <- bind_rows(f10J211) 
-rownames(f10J211) <- names 
-f10J211$indv <- names
-D10J211 <- mutate(D10J211, TRW_mean = rowMeans(select(D10J211, 
-                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
-D10J211 <- select_columns(D10J211)
-f10J211 <- merge(f10J211, D10J211, by= c("indv", "indv"))
-f10J211 <- Vessel_measurement(f10J211)
-
-
-##22-Julio-2021
-
-D22J21 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
-    sheet = "22Jul2021")
-D22J21 <- D22J21[!is.na(D22J21$Codigo),]
-D22J21 <- D22J21[!(D22J21$N_vasos <= 0),]
-
-names <- D22J21$indv
-path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/g22-7-2021"
-setwd(path)
-name_documents <- list.files(pattern = '*.csv')
-g22J21<- lapply(name_documents, read_delim, delim = ',')
-names(g22J21) <- names
-g22J21 <- lapply(g22J21, function(x) Feret_converter_analisistemporal(x,"mm"))
-g22J21 <- bind_rows(g22J21) 
-rownames(g22J21) <- names 
-g22J21$indv <- names
-D22J21 <- mutate(D22J21, TRW_mean = rowMeans(select(D22J21, 
-                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
-D22J21 <- select_columns(D22J21)
-g22J21 <- merge(g22J21, D22J21, by= c("indv", "indv"))
-g22J21 <- Vessel_measurement(g22J21)
-
-
-##9-septiembre-2021
-
-D9S21 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
-    sheet = "9Sep2021")
-D9S21 <- D9S21[!is.na(D9S21$Codigo),]
-D9S21 <- D9S21[!(D9S21$N_vasos <= 0),]
-
-names <- D9S21$indv
-path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/h9-9-2021"
-setwd(path)
-name_documents <- list.files(pattern = '*.csv')
-h9S21<- lapply(name_documents, read_delim, delim = ',')
-names(h9S21) <- names
-h9S21 <- lapply(h9S21, function(x) Feret_converter_analisistemporal(x,"mm"))
-h9S21 <- bind_rows(h9S21) 
-rownames(h9S21) <- names 
-h9S21$indv <- names
-D9S21 <- mutate(D9S21, TRW_mean = rowMeans(select(D9S21, 
-                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
-D9S21 <- select_columns(D9S21)
-h9S21 <- merge(h9S21, D9S21, by= c("indv", "indv"))
-h9S21 <- Vessel_measurement(h9S21)
-
-
-
-##14-Octubre-2021
-
-D14O21 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
-    sheet = "14Oct2021")
-D14O21 <- D14O21[!is.na(D14O21$Codigo),]
-D14O21 <- D14O21[!(D14O21$N_vasos <= 0),]
-
-names <- D14O21$indv
-path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/i14-10-2021"
-setwd(path)
-name_documents <- list.files(pattern = '*.csv')
-i14O21<- lapply(name_documents, read_delim, delim = ',')
-names(i14O21) <- names
-i14O21 <- lapply(i14O21, function(x) Feret_converter_analisistemporal(x,"mm"))
-i14O21 <- bind_rows(i14O21) 
-rownames(i14O21) <- names 
-i14O21$indv <- names
-D14O21 <- mutate(D14O21, TRW_mean = rowMeans(select(D14O21, 
-                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
-D14O21 <- select_columns(D14O21)
-i14O21 <- merge(i14O21, D14O21, by= c("indv", "indv"))
-i14O21 <- Vessel_measurement(i14O21)
-
-
-##18-Noviembre-2021
-
-D18Nov21 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
-    sheet = "18Nov2021")
-D18Nov21 <- D18Nov21[!is.na(D18Nov21$Codigo),]
-D18Nov21 <- D18Nov21[!(D18Nov21$N_vasos <= 0),]
-
-names <- D18Nov21$indv
-path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/j18-11-2021"
-setwd(path)
-name_documents <- list.files(pattern = '*.csv')
-j18Nov21<- lapply(name_documents, read_delim, delim = ',')
-names(j18Nov21) <- names
-j18Nov21 <- lapply(j18Nov21, function(x) Feret_converter_analisistemporal(x,"mm"))
-j18Nov21 <- bind_rows(j18Nov21) 
-rownames(j18Nov21) <- names 
-j18Nov21$indv <- names
-D18Nov21 <- mutate(D18Nov21, TRW_mean = rowMeans(select(D18Nov21, 
-                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
-D18Nov21 <- select_columns(D18Nov21)
-j18Nov21 <- merge(j18Nov21, D18Nov21, by= c("indv", "indv"))
-j18Nov21 <- Vessel_measurement(j18Nov21)
-
-
-##16-Diciembre-2021
-D16Dic21 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
-    sheet = "16Dic2021")
-D16Dic21 <- D16Dic21[!is.na(D16Dic21$Codigo),]
-D16Dic21 <- D16Dic21[!(D16Dic21$N_vasos <= 0),]
-
-names <- D16Dic21$indv
-path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/K16-12-2021"
-setwd(path)
-name_documents <- list.files(pattern = '*.csv')
-k16Dic21<- lapply(name_documents, read_delim, delim = ',')
-names(k16Dic21) <- names
-k16Dic21 <- lapply(k16Dic21, function(x) Feret_converter_analisistemporal(x,"mm"))
-k16Dic21 <- bind_rows(k16Dic21) 
-rownames(k16Dic21) <- names 
-k16Dic21$indv <- names
-D16Dic21 <- mutate(D16Dic21, TRW_mean = rowMeans(select(D16Dic21, 
-                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
-D16Dic21 <- select_columns(D16Dic21)
-k16Dic21 <- merge(k16Dic21, D16Dic21, by= c("indv", "indv"))
-k16Dic21 <- Vessel_measurement(k16Dic21)
-
-
-##19-Enero-2022
-D19En22 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
-    sheet = "19Ene22")
-D19En22 <- D19En22[!is.na(D19En22$Codigo),]
-D19En22 <- D19En22[!(D19En22$N_vasos <= 0),]
-
-names <- D19En22$indv
-path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/l19-1-2022"
-setwd(path)
-name_documents <- list.files(pattern = '*.csv')
-l19En22<- lapply(name_documents, read_delim, delim = ',')
-names(l19En22) <- names
-l19En22 <- lapply(l19En22, function(x) Feret_converter_analisistemporal(x,"mm"))
-l19En22 <- bind_rows(l19En22) 
-rownames(l19En22) <- names 
-l19En22$indv <- names
-D19En22 <- mutate(D19En22, TRW_mean = rowMeans(select(D19En22, 
-                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
-D19En22 <- select_columns(D19En22)
-l19En22 <- merge(l19En22, D19En22, by= c("indv", "indv"))
-l19En22 <- Vessel_measurement(l19En22)
-
-
-
-##8-Febrero-2022
-
-D8Feb22 <-read_excel("C:/Minicores/R_analisis/Datos_Modificados_Qca.xlsx", 
-    sheet = "8Feb22")
-D8Feb22 <- D8Feb22[!is.na(D8Feb22$Codigo),]
-D8Feb22 <- D8Feb22[!(D8Feb22$N_vasos <= 0),]
-
-names <- D8Feb22$indv
-path <-  "C:/Minicores/Qca_Bruto/ImageJ/Tablas/m8-2-2022"
-setwd(path)
-name_documents <- list.files(pattern = '*.csv')
-m8Feb22<- lapply(name_documents, read_delim, delim = ',')
-names(m8Feb22) <- names
-m8Feb22 <- lapply(m8Feb22, function(x) Feret_converter_analisistemporal(x,"mm"))
-m8Feb22 <- bind_rows(m8Feb22) 
-rownames(m8Feb22) <- names 
-m8Feb22$indv <- names
-D8Feb22 <- mutate(D8Feb22, TRW_mean = rowMeans(select(D8Feb22, 
-                                              c("TRW (mm) arriba","TRW (mm) centro","TRW (mm) Abajo")), na.rm = TRUE))
-D8Feb22 <- select_columns(D8Feb22)
-m8Feb22 <- merge(m8Feb22, D8Feb22, by= c("indv", "indv"))
-m8Feb22 <- Vessel_measurement(m8Feb22)
-
-
-```
-
-```{r Unificacion Cortes_Qca, include=FALSE}
-Cortes_Qca <- list("c1A21" =c1A21,"DD15A21"=DD15A21,"e29Abr21" = e29Abr21, "f10J211" = f10J211, "g22J21"=g22J21,    "h9S21"=h9S21 ,"i14O21"=i14O21, 
-               "j18Nov21" = j18Nov21, "k16Dic21"=k16Dic21, "l19En22" = l19En22 ,"m8Feb22" = m8Feb22)
-
-fechas <- as.Date(c("2021/04/01", "2021/04/15", "2021/04/29", "2021/06/10", "2021/07/22" ,"2021/09/09","2021/10/14", "2021/11/18","2021/12/16", "2022/01/19", "2022/02/08"))
-
-x <- 0
-while (x < length(Cortes_Qca)) {
-  x <- x +1
-  Cortes_Qca[[x]]$date <- fechas[x]
-}
-
-Cortes_Qca <- do.call(rbind, Map(data.frame, Cortes_Qca))
-
-
-
-Cortes_Qca$vessel_frequency[Cortes_Qca$vessel_frequency >= 100] <- 50
-Cortes_Qca$Dh[Cortes_Qca$Dh >= 80] <- 0.09895
-
-
-###hacer modelo de dh y de vessel frequency modelo gamm
-
-
-Cortes_Qca$date1 <- as.numeric(Cortes_Qca$date)
-Cortes_Qca$vessel_frequency
-Cortes_Qca$Plot <- ifelse( (Cortes_Qca$indv == 2) | (Cortes_Qca$indv == 3) | (Cortes_Qca$indv == 5), 1,
-                           ifelse((Cortes_Qca$indv == 8) | (Cortes_Qca$indv == 9) | (Cortes_Qca$indv == 10), 2 ,
-                                  ifelse((Cortes_Qca$indv == 18) | (Cortes_Qca$indv == 19), 3 ,
-                                         ifelse((Cortes_Qca$indv == 26) | (Cortes_Qca$indv == 30), 4 ,
-                                  ifelse((Cortes_Qca$indv == 36) | (Cortes_Qca$indv == 40) | (Cortes_Qca$indv == 44), 5 ,
-                                  ifelse((Cortes_Qca$indv == 47) | (Cortes_Qca$indv == 52), 6 , FALSE))))))
-
-Cortes_Qca_modelo <- merge(Cortes_Qca, DBH_H, by= c("indv","indv"))
-Cortes_Qca_modelo[63, 14 ] = 53
-Cortes_Qca_modelo[16, 14 ] = 60
-
-shapiro.test(Cortes_Qca_modelo$Dh)
-Cortes_Qca_modelo$Plot <- as.factor(Cortes_Qca_modelo$Plot)
-Cortes_Qca_modelo$indv <- as.factor(Cortes_Qca_modelo$indv)
-
-# modelo_dh1 <- gamm4(Dh ~ s(date1)+ Tratam + s(DBH_.cm.),data = Cortes_Qca_modelo, random=~(1|Plot/indv))
-# modelo_dh2 <- gamm4(Dh ~ s(date1)+ Tratam + s(Diametro_copa_.cm.),data = Cortes_Qca_modelo, random=~(1|Plot/indv))
-# modelo_dh3 <- gamm4(Dh ~ s(date1)+ s(DBH_.cm.) + s(Diametro_copa_.cm.),data = Cortes_Qca_modelo, random=~(1|Plot/indv))
-# 
-# model.sel(modelo_dh1$mer, modelo_dh2$mer,modelo_dh3$mer)  ##da significativo  el modelo 1, siendo el mejor modelo, aunque no hay mucha diferencia con el modelo 2, siendo más simple el 2, por ello elijo el modelo 2
-# summary(modelo_dh1$gam)
-# 
-# 
-# # simulateResiduals(modelo_dh1$mer, plot = T)
-# qqnorm(modelo_dh1$gam$residuals)
-# qqline(modelo_dh1$gam$residuals)
-# hist(modelo_dh1$gam$residuals) ###es el mejor modelo y sigue la normalidad
-# 
-# summary(modelo_dh1$gam)
-# 
-# #############no es significativa la tendencia de Dh
-# pred2 <- get_predictions(modelo_dh1$gam, 
-#                        cond = list(date1 = seq(min(Cortes_Qca_modelo$date1, na.rm=T),
-#                                             max(Cortes_Qca_modelo$date1, na.rm=T), 
-#                                             length.out = nrow(Cortes_Qca_modelo )),
-#                                   Tratam = c("Control", "Sequía"),
-#                                   se=T))
-# 
-# pred2$date <- as.Date(pred2$date1)
-# 
-# ggplot(data=pred2)+
-#   geom_line(mapping = aes(x=date, y=fit, color= Tratam), show.legend = F)+
-#   geom_ribbon(alpha=.4,mapping = aes(x=date, ymin=fit-CI, ymax=fit+CI, fill=Tratam), show.legend = T)+
-#   geom_point(data = Cortes_Qca_modelo, mapping =  aes(x=date, y=as.numeric(Dh), color=Tratam), show.legend = F)+
-#   scale_color_manual(values = c("#1E90FF","#FF4040"))+
-#   scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
-#   theme(panel.background = element_rect(fill = "white"),
-#           axis.line.x = element_line(colour="black"),
-#           axis.line.y = element_line(colour="black"),
-#         axis.text = element_text(color = "black",size = 12),
-#         axis.ticks.length  = unit(0.1, "cm"))+
-#   scale_x_date(date_breaks = "2 month" ,date_labels = "%m")+
-#   ylab("Dh")
-
-
-#############################
-
-######hora hago los cambios para la vessel frequency
-
-shapiro.test(Cortes_Qca_modelo$vessel_frequency) ##no es normal, por lo cual lo transformo
-qqnorm(Cortes_Qca_modelo$vessel_frequency)
-qqline(Cortes_Qca_modelo$vessel_frequency)
-hist(Cortes_Qca_modelo$vessel_frequency)
-skewness(Cortes_Qca_modelo$vessel_frequency, na.rm = TRUE) #veo que dispersion tiene los datos
-
-Cortes_Qca_modelo$vessel_frequency_trans <- log10(Cortes_Qca_modelo$vessel_frequency) ##realizo la transformacion
-hist(Cortes_Qca_modelo$vessel_frequency_trans)
-
-qqnorm(Cortes_Qca_modelo$vessel_frequency_trans)
-qqline(Cortes_Qca_modelo$vessel_frequency_trans)
-shapiro.test(Cortes_Qca_modelo$vessel_frequency_trans) ###veo que mis datos han mejorado la normalidad
-
- Cortes_Qca_modelo$vessel_frequency_trans <- ifelse( (Cortes_Qca_modelo$date1 == 18977 ) & (Cortes_Qca_modelo$Tratam == "Control" ) &  (Cortes_Qca_modelo$vessel_frequency_trans < 1 ), 1.5, Cortes_Qca_modelo$vessel_frequency_trans)
- 
- Cortes_Qca_modelo$DBH_.cm. <-  Cortes_Qca_modelo$`DBH_(cm)`
-  Cortes_Qca_modelo$Diametro_copa_.cm. <-  Cortes_Qca_modelo$`Diametro_copa_(cm)`
- 
-
-modelo1_vesselfreq <- gamm4(vessel_frequency_trans ~ s(date1)+ Tratam  + s(DBH_.cm.),data = Cortes_Qca_modelo , random=~(1|Plot/indv))
-modelo2_vesselfreq <- gamm4(vessel_frequency_trans ~ s(date1)+ Tratam + s(Diametro_copa_.cm.) ,data = Cortes_Qca_modelo, random=~(1|Plot/indv))
-modelo3_vesselfreq <- gamm4(vessel_frequency_trans ~ s(date1)  + s(DBH_.cm.) + s(Diametro_copa_.cm.),data = Cortes_Qca_modelo, random=~(1|Plot/indv))
-modelo4_vesselfreq <- gamm4(vessel_frequency_trans ~ s(date1)  + s(DBH_.cm.),data = Cortes_Qca_modelo, random=~(1|Plot/indv))
-modelo5_vesselfreq <- gamm4(vessel_frequency_trans ~ s(date1)  + s(Diametro_copa_.cm.),data = Cortes_Qca_modelo, random=~(1|Plot/indv))
-modelo6_vesselfreq <- gamm4(vessel_frequency_trans ~ s(date1)  + Tratam,data = Cortes_Qca_modelo, random=~(1|Plot/indv))
-modelo7_vesselfreq <- gamm4(vessel_frequency_trans ~ s(date1)+ Tratam  + s(DBH_.cm.) + s(Diametro_copa_.cm.),data = Cortes_Qca_modelo , random=~(1|Plot/indv))
-
-
-model.sel(modelo1_vesselfreq$mer, modelo2_vesselfreq$mer,modelo3_vesselfreq$mer, modelo4_vesselfreq$mer, modelo5_vesselfreq$mer, modelo6_vesselfreq$mer, modelo7_vesselfreq$mer) ###el mas significativo seria el 2
-summary(modelo6_vesselfreq$gam)
-qqnorm(modelo1_vesselfreq$gam$residuals)
-qqline(modelo1_vesselfreq$gam$residuals)
-
-summary(modelo1_vesselfreq$gam)
-summary(modelo2_vesselfreq$gam)
-summary(modelo3_vesselfreq$gam)
-summary(modelo4_vesselfreq$gam)
-summary(modelo5_vesselfreq$gam)
-summary(modelo6_vesselfreq$gam)
-summary(modelo7_vesselfreq$gam)
-sum(summary(modelo1_vesselfreq$gam)$s.table[, "edf"])
-sum(summary(modelo2_vesselfreq$gam)$s.table[, "edf"])
-sum(summary(modelo3_vesselfreq$gam)$s.table[, "edf"])
-sum(summary(modelo4_vesselfreq$gam)$s.table[, "edf"])
-sum(summary(modelo5_vesselfreq$gam)$s.table[, "edf"])
-sum(summary(modelo6_vesselfreq$gam)$s.table[, "edf"])
-sum(summary(modelo7_vesselfreq$gam)$s.table[, "edf"])
-
-pred1 <- get_predictions(modelo1_vesselfreq$gam, 
-                       cond = list(date1 = seq(min(Cortes_Qca_modelo$date1, na.rm=T),
-                                            max(Cortes_Qca_modelo$date1, na.rm=T), 
-                                            length.out = nrow(Cortes_Qca_modelo )),
-                                  Tratam = c("Control", "Sequía"),
-                                  se=T))
-
-pred1$date <- as.Date(pred1$date1)
-
-ggplot(data=pred1)+
-  geom_line(mapping = aes(x=date, y=fit, color= Tratam), show.legend = F)+
-  geom_ribbon(alpha=.4,mapping = aes(x=date, ymin=fit-CI, ymax=fit+CI, fill=Tratam), show.legend = T)+
-  geom_point(data = Cortes_Qca_modelo, mapping =  aes(x=date, y=as.numeric(vessel_frequency_trans), color=Tratam), show.legend = F)+
-  scale_color_manual(values = c("#1E90FF","#FF4040"))+
+TRW_2021$date_1 <- as.numeric(TRW_2021$date)
+modelo1 <- gamm(
+  log(TRWday_micras + 1) ~ treatment +
+                  s( date_1, k= 13, bs= "ts", m= 5) +        # curvas temporal separadas por tratamiento
+                  scale(Pci) +                       # efecto  lineal del patógeno
+                  scale(H_.cm.) + scale(Diametro_copa_.cm.),           # covariables lineales
+  random = list(indv = ~1),                       # interceptos aleatorios por árbol
+  correlation = corAR1(form = ~ date_1 | indv),   # autocorrelación temporal por individuo
+  data = TRW_2021,
+  method = "REML")
+modelo2 <- gamm(
+  log(TRWday_micras + 1) ~ treatment +
+                  s( date_1, k= 13, bs= "ts", m= 5) +        
+                  scale(H_.cm.) + scale(Diametro_copa_.cm.),          
+  random = list(indv = ~1),                       
+  correlation = corAR1(form = ~ date_1 | indv),   
+  data = TRW_2021,
+  method = "REML")
+modelo3 <- gamm(
+  log(TRWday_micras + 1) ~ treatment +          
+                  s( date_1, k= 13, bs= "ts", m= 5),      ####le puedo poner bs= "ts" para que empiece en y= 0, pero debe de tener m=10   
+  random = list(indv = ~1),                       
+  correlation = corAR1(form = ~ date_1 | indv),   
+  data = TRW_2021,
+  method = "REML")
+modelo4 <- gamm(
+  log(TRWday_micras + 1) ~ treatment +
+                 s( date_1, k= 13, bs= "ts", m= 5) +       
+                  scale(Pci),                    
+  random = list(indv = ~1),                       
+  correlation = corAR1(form = ~ date_1 | indv),   
+  data = TRW_2021,
+  method = "REML")
+
+
+model.sel(modelo1$lme, modelo2$lme, modelo3$lme,modelo4$lme) ##mejor el modelo 4
+
+residuos <- modelo3$lme$residuals
+qqnorm(residuos)
+qqline(residuos)
+hist(residuos) ###son normales
+
+summary(modelo3$gam)
+
+
+
+newdata <- data.frame(date_1=rep(seq(min(TRW_2021$date_1, na.rm=T),max(TRW_2021$date_1, na.rm=T),length.out = nrow(TRW_2021)), 2),
+           treatment = rep(c("control", "drought"), each = nrow(TRW_2021)),
+           indv = 2)
+
+model_growth <- predict(modelo3, newdata, se.fit= T)
+newdata$predict <- model_growth$fit
+newdata$CI <- model_growth$se.fit
+ggplot()+
+  geom_point(data = TRW_2021, aes(x= as.Date(date_1), y= log(TRWday_micras + 1), colour = treatment))+
+  geom_line(data = newdata, aes(x= as.Date(date_1), y=predict, colour = treatment))+
+  geom_ribbon(data = newdata, alpha=.4,mapping = aes(x=as.Date(date_1), ymin=predict-CI, ymax=predict+CI, fill=treatment))+
+    scale_color_manual(values = c("#1E90FF","#FF4040"))+
   scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
   theme(panel.background = element_rect(fill = "white"),
           axis.line.x = element_line(colour="black"),
           axis.line.y = element_line(colour="black"),
         axis.text = element_text(color = "black",size = 12),
         axis.ticks.length  = unit(0.1, "cm"))+
-  scale_x_date(date_breaks = "2 month" ,date_labels = "%m")
+  geom_hline(yintercept= 0)
 
+ggplot(data = TRW_2021, aes(x= as.Date(date_1), y= log(TRW_propTRW2021_mod + 1), colour = treatment))+
+  geom_point()+
+  geom_smooth()
+############enseñarselo a Mati
 
+```
 
+```{r veo cuanto y cuando ha crecido los indv por fecha, include=FALSE}
+###lo hago previo para poder escoger los vasos y el area nuevo
+ver_crecimiento <- data.frame(indv= TRW_2021$indv,  date = TRW_2021$date, TRW_2021 = TRW_2021$TRW_mean, TRW_2020 = TRW_2021$TRW_2020,diference_TRW= TRW_2021$diference_TRW, TRWday_micras= TRW_2021$TRWday_micras)
+
+ver_crecimiento$TRWday_micras <-  ifelse(ver_crecimiento$TRWday_micras == 0, NA, ver_crecimiento$TRWday_micras)
+
+ver_crecimiento <- ver_crecimiento[complete.cases(ver_crecimiento$TRWday_micras), ]
+
+ver_crecimiento$TRWdiffcorr <- ver_crecimiento$diference_TRW* ver_crecimiento$TRW_2020
+
+split(ver_crecimiento, ver_crecimiento$indv)
+
+```
+
+```{r cargar todos los Cortes_Qca, include=FALSE}
+# ####1-ABRIL-2021
+# paths <- c("C:/Minicores/Qca_Bruto/ImageJ/Tablas/c1-4-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/d15-4-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/e29-4-2021","C:/minicores/Qca_Bruto/ImageJ/Tablas/n13-5-21", "C:/Minicores/Qca_Bruto/ImageJ/Tablas/o27-5-21",      "C:/Minicores/Qca_Bruto/ImageJ/Tablas/f10-6-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/g22-7-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/h9-9-2021",
+#            "C:/Minicores/Qca_Bruto/ImageJ/Tablas/i14-10-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/j18-11-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/K16-12-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/l19-1-2022","C:/Minicores/Qca_Bruto/ImageJ/Tablas/m8-2-2022")
+# 
+# fechas <- c("1-4-21", "15-4-21","29-4-21","13-5-21","27-5-21","10-6-21","22-7-21","9-9-21","14-10-21","18-11-21","16-12-21","19-1-22","8-2-22")
+# 
+# 
+# x <- 0
+# vessel_imageJ <- list()
+# while(x < length(paths)){
+#   x <- x +1
+#   setwd(paths[x])
+#   name_documents <- list.files(pattern = '*.csv')
+# vessel_imageJ[[x]] <- lapply(name_documents, read_delim, delim = ',')
+#   names(vessel_imageJ[[x]]) <- name_documents
+#   
+#   y <- 0
+#   while(y < length(name_documents)){
+#     y <- y +1
+#     vessel_imageJ[[x]][[y]]$indv <- name_documents[y]
+#     vessel_imageJ[[x]][[y]]$date <- as.Date( fechas[x], format = "%d-%m-%y")
+#     }}
+# names(vessel_imageJ) <- fechas
+#                                                   
+# vessel_imageJ <- lapply(vessel_imageJ, function(x){
+#   
+#   x <- lapply(x, function(y){
+#     y$indv <- stringr::str_extract(y$indv, "\\d+")  
+#     return(y)})
+#   return(x)})
+# 
+# saveRDS(vessel_imageJ, file = "vessel_Data.rds")
 
 
 
@@ -1325,350 +1012,42 @@ ggplot(data=pred1)+
 
 ```
 
-```{r Modificacion Txemi_Escojo los vasos por fecha (hacer por fechas), include=FALSE}
-path <-  c("C:/Minicores/Qca_Bruto/ImageJ/Tablas/c1-4-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/d15-4-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/e29-4-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/f10-6-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/g22-7-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/h9-9-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/i14-10-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/j18-11-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/k16-12-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/l19-1-2022","C:/Minicores/Qca_Bruto/ImageJ/Tablas/m8-2-2022")
+```{r cojo los vasos por fecha, include=FALSE}
+###reorganizo el df
+newvessel <- vessel_imageJ 
 
+newvessel <- lapply(newvessel, function(x){
+  x <- lapply(x, function(y){
+    y <- data.frame("N_vessel" = y$` `, "Feret" = y$Feret, "indv"= y$indv, "date" = y$date)
+    return(y)
+  })
+  
+  x <- do.call(rbind, Map(data.frame, x))
+  return(x)})
+newvessel <- do.call(rbind, Map(data.frame, newvessel))
+newvessel <- split(newvessel, newvessel$indv)
+newvessel <- lapply(newvessel, function(x){
+  x <- split(x, x$date)
+  return(x)})
+##indv2
+
+contiene_13My <- c(4)
+
+####me he quedado aqui
+
+
+contiene <- list(contiene_13My, )
 x <- 0
-date_vess <- list("c1A21" = NA,"DD15A21"=NA,"e29Abr21" = NA, "f10J211" = NA, "g22J21"=NA,    "h9S21"=NA ,"i14O21"=NA, 
-               "j18Nov21" = NA, "k16Dic21"=NA, "l19En22" = NA ,"m8Feb22" = NA)
-
-
-while(x < length(path)){
-  x <-  x +1
-  setwd(path[x])
-  name_documents <- list.files(pattern = '*.csv')
-  docum <- lapply(name_documents, read_delim, delim = ',')
-  names(docum) <- name_documents
-  date_vess[[x]] <- docum
+while(x < length(newvessel[[1]])){
+  x <- x+1
+  newvessel[[x]]$N_vessel <- ifelse(newvessel[[x]]$N_vessel %in% contiene[[x]], newvessel[[x]]$N_vessel, NA)
 }
-########una vez cargado todo, miro como va variando dependiendo de la diferencia de TRW, por lo cual elimino en cada fecha los vasos ya formados
-##lo voy ha hacer por indv
-##indv 2
-date_vess$f10J211$a2QcC10J21.csv <- date_vess$f10J211$a2QcC10J21.csv[date_vess$f10J211$a2QcC10J21.csv$` ` != 1 | date_vess$f10J211$a2QcC10J21.csv$` ` != 2 | date_vess$f10J211$a2QcC10J21.csv$` ` != 3 | date_vess$f10J211$a2QcC10J21.csv$` ` != 4, ]
 
-date_vess$g22J21$a2QcC22J21.csv[date_vess$g22J21$a2QcC22J21.csv$` ` == 2 | date_vess$g22J21$a2QcC22J21.csv$` ` ==  4 , ]
 
-date_vess$h9S21$`2QcC9S21.csv` <- date_vess$h9S21$`2QcC9S21.csv`[date_vess$h9S21$`2QcC9S21.csv`$` ` == 5 | date_vess$h9S21$`2QcC9S21.csv`$` ` ==  7 | date_vess$h9S21$`2QcC9S21.csv`$` ` ==  8 | date_vess$h9S21$`2QcC9S21.csv`$` ` ==  11 | date_vess$h9S21$`2QcC9S21.csv`$` ` ==  14 | date_vess$h9S21$`2QcC9S21.csv`$` ` ==  16 | date_vess$h9S21$`2QcC9S21.csv`$` ` ==  17 | date_vess$h9S21$`2QcC9S21.csv`$` ` ==  19  | date_vess$h9S21$`2QcC9S21.csv`$` ` ==  20  | date_vess$h9S21$`2QcC9S21.csv`$` ` ==  21  | date_vess$h9S21$`2QcC9S21.csv`$` ` ==  23 | date_vess$h9S21$`2QcC9S21.csv`$` ` ==   24 , ]
 
-date_vess$i14O21$a2QcC14O21.csv <- NULL
 
-date_vess$j18Nov21$a2QcC18N21.csv <- date_vess$j18Nov21$a2QcC18N21.csv [date_vess$j18Nov21$a2QcC18N21.csv$` ` == 1 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==  2 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==  3 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==  5 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==  6 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==  8 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==  9 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==  10   | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==  11 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==  13 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==  14 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   17  | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   18 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   22 
- | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   27 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   23 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   21 
- | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   25 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   29 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   26 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   31 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   32 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   33 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   35 | date_vess$j18Nov21$a2QcC18N21.csv$` ` ==   34 , ]
 
 
-date_vess$k16Dic21$`2QcC16D21.csv` <- date_vess$k16Dic21$`2QcC16D21.csv` [date_vess$k16Dic21$`2QcC16D21.csv` $` ` == 1 | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==  4 | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==  9 | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==  8 | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==  7 | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==  14 | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==  12 | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==  13   | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==  20 | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==  27 | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==  28 | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==   25  | date_vess$k16Dic21$`2QcC16D21.csv` $` ` ==   24, ]
-
-date_vess$l19En22$a2QcC19E22.csv <- date_vess$l19En22$a2QcC19E22.csv [date_vess$l19En22$a2QcC19E22.csv$` ` == 8 | date_vess$l19En22$a2QcC19E22.csv $` ` ==  7 | date_vess$l19En22$a2QcC19E22.csv $` ` ==  15 | date_vess$l19En22$a2QcC19E22.csv $` ` ==  20 | date_vess$l19En22$a2QcC19E22.csv $` ` ==  23 | date_vess$l19En22$a2QcC19E22.csv $` ` ==  26 | date_vess$l19En22$a2QcC19E22.csv $` ` ==  27 | date_vess$l19En22$a2QcC19E22.csv $` ` ==  30   | date_vess$l19En22$a2QcC19E22.csv $` ` ==  34 | date_vess$l19En22$a2QcC19E22.csv $` ` ==  37 | date_vess$l19En22$a2QcC19E22.csv $` ` ==  40 | date_vess$l19En22$a2QcC19E22.csv $` ` ==   44, ]
-
-
-date_vess$m8Feb22$a2QcC2F22.csv <- NULL
-
-###indv3
-
-date_vess$e29Abr21$b3QcC29A21.csv <- date_vess$e29Abr21$b3QcC29A21.csv[date_vess$e29Abr21$b3QcC29A21.csv$` ` == 3 | date_vess$e29Abr21$b3QcC29A21.csv$` ` == 2, ]
-
-
-
-date_vess$f10J211$b3QcC10J21.csv <- date_vess$f10J211$b3QcC10J21.csv[date_vess$f10J211$b3QcC10J21.csv$` ` == 1 | date_vess$f10J211$b3QcC10J21.csv$` ` == 2 | date_vess$f10J211$b3QcC10J21.csv$` ` == 3 | date_vess$f10J211$b3QcC10J21.csv$` ` ==  5 | date_vess$f10J211$b3QcC10J21.csv$` ` ==  6 | date_vess$f10J211$b3QcC10J21.csv$` ` ==  7 | date_vess$f10J211$b3QcC10J21.csv$` ` ==  8, ]
-
-date_vess$g22J21$b3QcC22J21.csv <- date_vess$g22J21$b3QcC22J21.csv[date_vess$g22J21$b3QcC22J21.csv$` ` == 1 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  2 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  4 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  6 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  9 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  16 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  12 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  8 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  7 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  13 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  21 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  22 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  23 | date_vess$g22J21$b3QcC22J21.csv$` ` ==  24, ]
-
-date_vess$h9S21$`3QcC9S21.csv` <- date_vess$h9S21$`3QcC9S21.csv`[date_vess$h9S21$`3QcC9S21.csv`$` ` == 5 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==  16 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==  18 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==  25 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==  26 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==  28 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==  29 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==  32  | date_vess$h9S21$`3QcC9S21.csv`$` ` ==  34  | date_vess$h9S21$`3QcC9S21.csv`$` ` ==  41  | date_vess$h9S21$`3QcC9S21.csv`$` ` ==  43 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==   47 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==   48 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==   49 | date_vess$h9S21$`3QcC9S21.csv`$` ` ==   49 , ]
-
-date_vess$i14O21$b3QcC14O21.csv <- date_vess$i14O21$b3QcC14O21.csv[date_vess$i14O21$b3QcC14O21.csv$` ` == 1 | date_vess$i14O21$b3QcC14O21.csv$` ` ==  2 | date_vess$i14O21$b3QcC14O21.csv$` ` ==  5 | date_vess$i14O21$b3QcC14O21.csv$` ` ==  4 | date_vess$i14O21$b3QcC14O21.csv$` ` ==  3 | date_vess$i14O21$b3QcC14O21.csv$` ` ==  11 | date_vess$i14O21$b3QcC14O21.csv$` ` ==  9 | date_vess$i14O21$b3QcC14O21.csv$` ` ==  23  | date_vess$i14O21$b3QcC14O21.csv$` ` ==  25  | date_vess$i14O21$b3QcC14O21.csv$` ` ==  21  | date_vess$i14O21$b3QcC14O21.csv$` ` ==  18 | date_vess$i14O21$b3QcC14O21.csv$` ` ==   17 | date_vess$i14O21$b3QcC14O21.csv$` ` ==   20 | date_vess$i14O21$b3QcC14O21.csv$` ` ==   19, ]
-
-date_vess$j18Nov21$b3QcC18N21.csv <- NULL
-
-
-date_vess$k16Dic21$`3QcC16D21.csv` <- date_vess$k16Dic21$`3QcC16D21.csv` [date_vess$k16Dic21$`3QcC16D21.csv` $` ` == 4 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   3| date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==  1 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==  9 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==  7 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==  15 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==  14 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==  18   | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==  19 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==  21 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==  23 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   22  | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   27 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   30  | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   38 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   34  | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   33 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   43  | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   46  | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   39  | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   37 | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   31  | date_vess$k16Dic21$`3QcC16D21.csv` $` ` ==   35, ]
-
-date_vess$l19En22$b3QcC19E22.csv <- NULL
-
-
-date_vess$m8Feb22$b3QcC2F22.csv <- NULL
-
-
-###indv5
-
-date_vess$e29Abr21$c5QcC29A21.csv <- date_vess$e29Abr21$c5QcC29A21.csv[date_vess$e29Abr21$c5QcC29A21.csv$` ` == 1 | date_vess$e29Abr21$c5QcC29A21.csv$` ` == 3, ]
-
-
-
-date_vess$f10J211$c5QcC10J21.csv <- NULL
-
-date_vess$g22J21$c5QcC22J21.csv <- date_vess$g22J21$c5QcC22J21.csv[date_vess$g22J21$c5QcC22J21.csv$` ` == 1 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  2 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  3 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  8 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  7 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  4 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  6 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  10 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  12 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  13 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  14 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  15 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  17 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  19 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  21 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  22 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  20 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  18 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  24 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  23 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  27 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  28 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  29 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  32 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  36 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  37 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  34 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  35 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  31 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  33 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  40 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  41 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  42 | date_vess$g22J21$c5QcC22J21.csv$` ` ==  38, ]
-
-date_vess$h9S21$`5QcC9S21.csv` <- NULL
-
-date_vess$l19En22$c5QcC19E22.csv <-   date_vess$l19En22$c5QcC19E22.csv[date_vess$l19En22$c5QcC19E22.csv$` ` == 2 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  5 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  8 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  7 | date_vess$l19En22$c5QcC19E22.csv$` ` ==   9 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  12 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  14 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  16 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  17 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  21 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  22 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  23 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  27 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  30 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  34 | date_vess$l19En22$c5QcC19E22.csv$` ` ==  35, ]
-
-
-date_vess$m8Feb22$c5QcC2F22.csv <- NULL
-
-##indv8
-
-
-date_vess$f10J211$d8QcC10J21.csv <- date_vess$f10J211$d8QcC10J21.csv[date_vess$f10J211$d8QcC10J21.csv$` ` == 1 | date_vess$f10J211$d8QcC10J21.csv$` ` == 2 | date_vess$f10J211$d8QcC10J21.csv$` ` == 3 | date_vess$f10J211$d8QcC10J21.csv$` ` ==  4 | date_vess$f10J211$d8QcC10J21.csv$` ` ==  6 | date_vess$f10J211$d8QcC10J21.csv$` ` ==  7 | date_vess$f10J211$d8QcC10J21.csv$` ` ==  8 | date_vess$f10J211$d8QcC10J21.csv$` ` ==  10 | date_vess$f10J211$d8QcC10J21.csv$` ` ==  11, ]
-
-date_vess$g22J21$d8QcC22J21.csv <- date_vess$g22J21$d8QcC22J21.csv[date_vess$g22J21$d8QcC22J21.csv$` ` == 5 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  7 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  11 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  12 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  14 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  15 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  16 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  19 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  21 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  24 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  25 | date_vess$g22J21$d8QcC22J21.csv$` ` ==  27, ]
-
-date_vess$h9S21$`8QcC9S21.csv` <- NULL
-
-date_vess$i14O21$c8QcC14O21.csv <- NULL
-
-date_vess$j18Nov21$c8QcC18N21.csv <-  date_vess$g22J21$c8QcC18N21.csv[date_vess$g22J21$c8QcC18N21.csv$` ` == 5 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  7 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  11 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  12 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  14 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  15 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  16 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  19 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  21 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  24 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  25 | date_vess$g22J21$c8QcC18N21.csv$` ` ==  27, ]
-
-
-date_vess$k16Dic21$`8QcC16D21.csv` <- date_vess$k16Dic21$`8QcC16D21.csv` [date_vess$k16Dic21$`8QcC16D21.csv` $` ` == 7 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   6| date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==  9 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==  8 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==  12 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==  17 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==  18 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==  15   | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==  22 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==  33 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==  35 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   37  | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   43 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   47  | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   46 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   55  | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   57 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   59  | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   67  | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   65  | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   66 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   70  | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   71 | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   74  | date_vess$k16Dic21$`8QcC16D21.csv` $` ` ==   73, ]
-
-
-
-
-date_vess$m8Feb22$d8QcC2F22.csv <- NULL
-
-##indv9
-
-date_vess$DD15A21$b9QcC15A21s.csv <- date_vess$DD15A21$b9QcC15A21s.csv[date_vess$DD15A21$b9QcC15A21s.csv$` ` == 1 | date_vess$DD15A21$b9QcC15A21s.csv$` ` == 2, ]
-
-date_vess$e29Abr21$d9QcC29A21.csv  <- date_vess$e29Abr21$d9QcC29A21.csv[date_vess$e29Abr21$d9QcC29A21.csv$` ` == 2 | date_vess$e29Abr21$d9QcC29A21.csv$` ` == 3, ]
-
-date_vess$f10J211$g9QcC10J21.csv <- NULL
-
-quitar <- c(1,22,7,19)
-date_vess$g22J21$e9QcC22J21.csv <- date_vess$g22J21$e9QcC22J21.csv[!date_vess$g22J21$e9QcC22J21.csv$` ` %in% quitar , ]
-
-poner <- c(1,10,12,20,21,18)
-date_vess$h9S21$`9QcC9S21.csv` <- date_vess$h9S21$`9QcC9S21.csv`[date_vess$h9S21$`9QcC9S21.csv`$` ` %in% poner , ]
-
-poner <- c(5,8,10,12,14,17,19,22,25)
-date_vess$i14O21$d9QcC14O21.csv <-  date_vess$i14O21$d9QcC14O21.csv[date_vess$i14O21$d9QcC14O21.csv$` ` %in% poner , ]
-
-date_vess$j18Nov21$d9QcC18N21.csv <- NULL
-
-date_vess$l19En22$d9QcC19E22.csv <- NULL
-
-
-#indv10
-
-date_vess$e29Abr21$e10QcC29A21.csv <- NULL
-date_vess$f10J211$h10QcC10J21.csv <- NULL
-
-date_vess$DD15A21$b9QcC15A21s.csv <- date_vess$DD15A21$b9QcC15A21s.csv[date_vess$DD15A21$b9QcC15A21s.csv$` ` == 1 | date_vess$DD15A21$b9QcC15A21s.csv$` ` == 2, ]
-
-quitar <- c(1,3,12,45,36,28)
-date_vess$g22J21$f10QcC22J21.csv <- date_vess$g22J21$f10QcC22J21.csv[!date_vess$g22J21$f10QcC22J21.csv$` ` %in% quitar , ]
-
-
-date_vess$h9S21$`10QcC9S21.csv` <- NULL
-
-poner <- c(3,8,9,12,10,11,15,13,16,17,21,22,23,25,31,35,38)
-date_vess$i14O21$h10QcC14O21.csv <-  date_vess$i14O21$h10QcC14O21.csv[date_vess$i14O21$h10QcC14O21.csv$` ` %in% poner , ]
-
-date_vess$j18Nov21$e10QcC18N21.csv <- NULL
-
-poner <- c(2,3,5,9,14,16,18,22,24,25,26)
-date_vess$k16Dic21$`10QcC16D21.csv` <-  date_vess$k16Dic21$`10QcC16D21.csv`[date_vess$k16Dic21$`10QcC16D21.csv`$` ` %in% poner , ]
-
-date_vess$l19En22$e10QcC19E22.csv <- NULL
-date_vess$m8Feb22$h10QcC2F22.csv <- NULL
-
-#indv18
-
-
-date_vess$DD15A21$d18QcS15A21.csv <- NULL
-date_vess$e29Abr21$f18QcS29A21.csv <- NULL
-
-
-quitar <- c(1,7,5,6)
-date_vess$f10J211$i18QcS10J21.csv <- date_vess$f10J211$i18QcS10J21.csv[!date_vess$f10J211$i18QcS10J21.csv$` ` %in% quitar , ]
-
-poner <- c(2,4,7,5,3,1,14,17,22,28,25,27,24,16,10,8,13)
-date_vess$g22J21$g18QcS22J21.csv <-  date_vess$g22J21$g18QcS22J21.csv [date_vess$g22J21$g18QcS22J21.csv$` ` %in% poner , ]
-
-date_vess$h9S21$`18QcS9S21.csv` <- NULL
-
-poner <- c(20,21,19,18,17,23,24,10,14,9,2,7)
-date_vess$i14O21$i18QcS14O21.csv <-  date_vess$i14O21$i18QcS14O21.csv[date_vess$i14O21$i18QcS14O21.csv$` ` %in% poner , ]
-
-date_vess$j18Nov21$e10QcC18N21.csv <- NULL
-
-
-date_vess$k16Dic21$`18QcS16D21.csv` <- NULL
-
-poner <- c(2,3,5,12,4,9,14,6,33,34,28,25,27,30)
-date_vess$l19En22$h18QcS19E22.csv <- date_vess$l19En22$h18QcS19E22.csv[date_vess$l19En22$h18QcS19E22.csv$` ` %in% poner , ]
-
-##indv19
-
-date_vess$DD15A21$e19QcS15A21.csv <- NULL
-
-quitar <- c(1)
-date_vess$e29Abr21$g19QcS29A21.csv <-  date_vess$e29Abr21$g19QcS29A21.csv[!date_vess$e29Abr21$g19QcS29A21.csv$` ` %in% quitar , ]
-
-
-quitar <- c(1,6,8,14,17,19)
-date_vess$f10J211$j19QcS10J21.csv <- date_vess$f10J211$j19QcS10J21.csv[!date_vess$f10J211$j19QcS10J21.csv$` ` %in% quitar , ]
-
-poner <- c(2,7,13,20,24,12,18,9,5,4,17,26,3,10)
-date_vess$g22J21$h19QcS22J21.csv <-  date_vess$g22J21$h19QcS22J21.csv [date_vess$g22J21$h19QcS22J21.csv$` ` %in% poner , ]
-
-poner <- c(2,8,11,15,19,22,26,27,28)
-date_vess$j18Nov21$g19QcS18N21.csv <- date_vess$j18Nov21$g19QcS18N21.csv [date_vess$j18Nov21$g19QcS18N21.csv$` ` %in% poner , ]
-
-poner <- c(10,17,30,43,45,41,54)
-date_vess$k16Dic21$`19QcS16D21.csv` <- date_vess$k16Dic21$`19QcS16D21.csv` [date_vess$k16Dic21$`19QcS16D21.csv`$` ` %in% poner , ]
-
-date_vess$l19En22$i19QcS19E22.csv <- NULL
-
-poner <- c(28,27,24,44,45)
-date_vess$m8Feb22$i19QcS2F22.csv <- date_vess$m8Feb22$i19QcS2F22.csv [date_vess$m8Feb22$i19QcS2F22.csv$` ` %in% poner , ]
-
-##indv26
-
-date_vess$DD15A21$f26QcS15A21.csv <- NULL
-
-date_vess$e29Abr21$h26QcS29A21.csv <- NULL
-
-quitar <- c(1,2,4)
-date_vess$h9S21$`26QsS9S21.csv` <- date_vess$h9S21$`26QsS9S21.csv`[!date_vess$h9S21$`26QsS9S21.csv`$` ` %in% quitar , ]
-
-
-date_vess$i14O21$j26QcS14O21.csv <- NULL
-
-###indv30
-
-quitar <- c(3)
-date_vess$e29Abr21$i30QcS29A21.csv <-  date_vess$e29Abr21$i30QcS29A21.csv[!date_vess$e29Abr21$i30QcS29A21.csv$` ` %in% quitar , ]
-
-quitar <- c(1,5)
-date_vess$f10J211$k30QcS10J21.csv <- date_vess$f10J211$k30QcS10J21.csv[!date_vess$f10J211$k30QcS10J21.csv$` ` %in% quitar , ]
-
-quitar <- c(1,2,3,6,9,11,20,27,31,38,17,22,26,33,42,45)
-date_vess$g22J21$j30QcS22J21.csv <-  date_vess$g22J21$j30QcS22J21.csv [!date_vess$g22J21$j30QcS22J21.csv$` ` %in% quitar , ]
-
-poner <- c(1,2,6,7,12)
-date_vess$h9S21$`30QsS9S21.csv` <- date_vess$h9S21$`30QsS9S21.csv` [date_vess$h9S21$`30QsS9S21.csv`$` ` %in% poner , ]
-
-date_vess$i14O21$k30QcS14O21.csv <- NULL
-
-date_vess$j18Nov21$h30QcS18N21.csv <- NULL
-
-poner <- c(3,10,17,25)
-date_vess$k16Dic21$`30QcS16D21.csv` <- date_vess$k16Dic21$`30QcS16D21.csv` [date_vess$k16Dic21$`30QcS16D21.csv`$` ` %in% poner , ]
-
-
-date_vess$l19En22$j30QcS19E22.csv <- NULL
-
-poner <- c(10,15,19,22,26,27,33,39,44,46,42,47,51,56,55,57)
-date_vess$m8Feb22$j30QcS2F22.csv <- date_vess$m8Feb22$j30QcS2F22.csv [date_vess$m8Feb22$j30QcS2F22.csv$` ` %in% poner , ]
-
-###indv36
-
-quitar <- c(2,3,5)
-date_vess$e29Abr21$j36QcC29A21.csv <-  date_vess$e29Abr21$j36QcC29A21.csv[!date_vess$e29Abr21$j36QcC29A21.csv$` ` %in% quitar , ]
-
-
-quitar <- c(6,11,12,16,17)
-date_vess$g22J21$k36QcC22J21.csv <-  date_vess$g22J21$k36QcC22J21.csv [!date_vess$g22J21$k36QcC22J21.csv$` ` %in% quitar , ]
-
-poner <- c(3,6,5,7,11,16)
-date_vess$h9S21$`36QsC9S21.csv` <- date_vess$h9S21$`36QsC9S21.csv` [date_vess$h9S21$`36QsC9S21.csv`$` ` %in% poner , ]
-
-
-poner <- c(7,8,9,12,14,15,21,25,23,22,31,35,30,32,27,29,33,34)
-date_vess$i14O21$l36QcC14O21.csv <- date_vess$i14O21$l36QcC14O21.csv [date_vess$i14O21$l36QcC14O21.csv$` ` %in% poner , ]
-
-date_vess$j18Nov21$i36QcC18N21.csv <-  NULL
-
-date_vess$k16Dic21$`36QcC16D21.csv` <- NULL
-
-date_vess$l19En22$k36QcC19E22.csv <- NULL
-
-###indv40
-
-quitar <- c(1,2,5)
-date_vess$f10J211$l40QcC10J21.csv <-  date_vess$f10J211$l40QcC10J21.csv [!date_vess$f10J211$l40QcC10J21.csv$` ` %in% quitar , ]
-
-poner <- c(1,4,9,10,11,16,20,22,24,26,28,31,35,39,38,40,42)
-date_vess$g22J21$l40QcC22J21.csv <-  date_vess$g22J21$l40QcC22J21.csv [date_vess$g22J21$l40QcC22J21.csv$` ` %in% poner , ]
-
-
-date_vess$h9S21$`40QsC9S21.csv` <- NULL
-
-poner <- c(9,12,16,18,20,22)
-date_vess$i14O21$m40QcC14O21.csv <- date_vess$i14O21$m40QcC14O21.csv [date_vess$i14O21$m40QcC14O21.csv$` ` %in% poner , ]
-
-date_vess$j18Nov21$j40cC18N21.csv <-  NULL
-
-poner <- c(3,4,21)
-date_vess$l19En22$m40QcC19E22.csv <- date_vess$l19En22$m40QcC19E22.csv [date_vess$l19En22$m40QcC19E22.csv$` ` %in% poner , ]
-
-poner <- c(13,17,23)
-date_vess$m8Feb22$k40QcC2F22.csv <- date_vess$m8Feb22$k40QcC2F22.csv [date_vess$m8Feb22$k40QcC2F22.csv$` ` %in% poner , ]
-
-###indv44
-
-
-quitar <- c(1,2,5,6)
-date_vess$f10J211$m44QcC10J21.csv <-  date_vess$f10J211$m44QcC10J21.csv [!date_vess$f10J211$m44QcC10J21.csv$` ` %in% quitar , ]
-
-quitar <- c(1,6,8,10,12,13,17,18,19,26,22,25,27,29,32)
-date_vess$g22J21$m44QcC22J21.csv <-  date_vess$g22J21$m44QcC22J21.csv [!date_vess$g22J21$m44QcC22J21.csv$` ` %in% quitar , ]
-
-
-poner <- c(1,2,3,4,5,6,8,12,14,18,22,20,24,25,27,31,35,32,39,41,44,45,47)
-date_vess$h9S21$`44QsC9S21.csv` <- date_vess$h9S21$`44QsC9S21.csv` [date_vess$h9S21$`44QsC9S21.csv`$` ` %in% poner , ]
-
-date_vess$k16Dic21$`44QcC16D21.csv` <- NULL
-
-poner <- c(1,4,6,9,11,12,19,17,21,25,45)
-date_vess$l19En22$n44QcC19E22.csv <- date_vess$l19En22$n44QcC19E22.csv [date_vess$l19En22$n44QcC19E22.csv$` ` %in% poner , ]
-
-date_vess$m8Feb22$l44QcC2F22.csv <- NULL
-
-###indv47
-
-date_vess$c1A21$h47QcS1A21.csv <- NULL
-
-date_vess$e29Abr21$m47QcS29A21.csv <- NULL
-
-quitar <- c(12,13,14,9,18,3)
-date_vess$f10J211$n47QcS10J21.csv <-  date_vess$f10J211$n47QcS10J21.csv [!date_vess$f10J211$n47QcS10J21.csv$` ` %in% quitar , ]
-
-poner <- c(26,7,2,19,5,9,18,24,25,20,13,11,4,22)
-date_vess$g22J21$n47QcS22J21.csv <-  date_vess$g22J21$n47QcS22J21.csv [date_vess$g22J21$n47QcS22J21.csv$` ` %in% poner , ]
-
-date_vess$h9S21$`47QsS9S21.csv` <- NULL
-
-poner <- c(13,14,31,37,38)
-date_vess$i14O21$n47QcS14O21.csv <-  date_vess$i14O21$n47QcS14O21.csv [date_vess$i14O21$n47QcS14O21.csv$` ` %in% poner , ]
-
-date_vess$j18Nov21$k47cS18N21.csv <- NULL
-
-poner <- c(1,2,3,6,7,8,9,11,12,14,18)
-date_vess$k16Dic21$`47QcS16D21.csv` <-  date_vess$k16Dic21$`47QcS16D21.csv` [date_vess$k16Dic21$`47QcS16D21.csv`$` ` %in% poner , ]
-
-date_vess$l19En22$o47QcS19E22.csv <- NULL
-
-###indv52
-
-
-date_vess$e29Abr21$n52QcS29A21.csv <- NULL
-
-quitar <- c(1,3,4,6,7,9,10)
-date_vess$g22J21$o52QcS22J21.csv <-  date_vess$g22J21$o52QcS22J21.csv [!date_vess$g22J21$o52QcS22J21.csv$` ` %in% quitar , ]
-
-poner <- c(3,6,8,12,13,20,23,24)
-date_vess$i14O21$o52QcS14O21.csv <-  date_vess$i14O21$o52QcS14O21.csv [date_vess$i14O21$o52QcS14O21.csv$` ` %in% poner , ]
-
-poner <- c(3,5,7,9,12,14,22,23,24,25)
-date_vess$k16Dic21$`52QcS16D21.csv` <-  date_vess$k16Dic21$`52QcS16D21.csv` [date_vess$k16Dic21$`52QcS16D21.csv`$` ` %in% poner , ]
-
-poner <- c(3,11,12,14,19,26)
-date_vess$l19En22$r52QcS19E22.csv <- date_vess$l19En22$r52QcS19E22.csv[date_vess$l19En22$r52QcS19E22.csv$` ` %in% poner , ]
-
-date_vess$m8Feb22$m52QcS2F22.csv <- NULL
 
 
 ```
