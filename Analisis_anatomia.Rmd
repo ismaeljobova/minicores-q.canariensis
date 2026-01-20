@@ -806,7 +806,6 @@ TRW_2021 <- do.call(rbind, Map(data.frame, TRW_2021)) ####lo uno todo
 
 TRW_2021 <- merge(TRW_2021,Minicore_fielddata$phytophthora, by=c("indv", "indv"))
 TRW_2021 <- merge(TRW_2021,Minicore_fielddata$Datos_pie, by=c("indv"))
-
 TRW_2021 <- TRW_2021[!names(TRW_2021) %in% c("Plot.x", "Plot.y","Finca","Tratam","Especie","Árbol")]
 
 
@@ -826,59 +825,84 @@ TRW_2021 <- lapply(TRW_2021, function(x){
   diference_Date <- c(diference_0, diff.Date(x$date))
   x$diference_Date <- diference_Date
   
-  ######hago la proporcion de TRW con 2020 ###version a partir de la media del año 2020 con el 80%
-  # mean_TRW_indv <- mean(x$TRW_2020)
-  # x$TRW_propTRW2021 <- (x$TRW_mean*mean_TRW_indv)/x$TRW_2020
-  # x$TRW_propTRW2021_mod1 <- x$TRW_propTRW2021
-  # 
-  # z <- 1 ###empiezo en el 2 ya que fila 1 no se puede comparar con la 0
-  # while(z < length(x$indv)){
-  #   z <- z+1
-  #   if( (x$TRW_propTRW2021_mod1[z]/x$TRW_propTRW2021_mod1[z-1]) < 0.85){x$TRW_propTRW2021_mod1[z] <- x$TRW_propTRW2021_mod1[z-1]}  }
-  
   ###proporcion con el 2020 con respecto a su fecha
   x$TRW_propTRW2021 <- (x$TRW_mean)/x$TRW_2020
 
   
   
   return(x)
-}) ###duda Eli MIRAR LOS ERRORES CON ELLA, MUCHAS MEDICIONES NEGATIVAS
+}) ###proporcion TRW2021 con respecto al crecimiento 2020
+
+###mirar out-values
+lapply(TRW_2021, function(x){
+  ggplot(x, aes(x=date, y = TRW_propTRW2021))+
+    geom_point()
+})
+
+##modifico los outvalue de elongacion
+TRW_2021$`3`$TRW_propTRW2021[10] <- TRW_2021$`3`$TRW_propTRW2021[11]
+TRW_2021$`5`$TRW_propTRW2021[6] <- TRW_2021$`5`$TRW_propTRW2021[8]
+TRW_2021$`5`$TRW_propTRW2021[7] <- TRW_2021$`5`$TRW_propTRW2021[8]
+TRW_2021$`18`$TRW_propTRW2021[10] <- TRW_2021$`5`$TRW_propTRW2021[11]
+TRW_2021$`19`$TRW_propTRW2021[9] <- TRW_2021$`19`$TRW_propTRW2021[10]
+TRW_2021$`19`$TRW_propTRW2021[13] <- TRW_2021$`19`$TRW_propTRW2021[12]
+TRW_2021$`36`$TRW_propTRW2021[9] <- TRW_2021$`36`$TRW_propTRW2021[10]
+TRW_2021$`40`$TRW_propTRW2021[6] <- TRW_2021$`40`$TRW_propTRW2021[7]
+TRW_2021$`44`$TRW_propTRW2021[3] <- TRW_2021$`44`$TRW_propTRW2021[5]
+TRW_2021$`44`$TRW_propTRW2021[4] <- TRW_2021$`44`$TRW_propTRW2021[5]
+TRW_2021$`44`$TRW_propTRW2021[6] <- TRW_2021$`44`$TRW_propTRW2021[7]
+TRW_2021$`47`$TRW_propTRW2021[9] <- TRW_2021$`47`$TRW_propTRW2021[10]
+TRW_2021$`52`$TRW_propTRW2021[7] <- TRW_2021$`52`$TRW_propTRW2021[8]
+lapply(TRW_2021, function(x){
+  ggplot(x, aes(x=date, y = TRW_propTRW2021))+
+    geom_point()
+})
+
 
 TRW_2021 <- lapply(TRW_2021, function(x){
-  z <- 1 ###empiezo en el 2 ya que fila 1 no se puede comparar con la 0
-  while(z < length(x$indv)){
-    z <- z+1
-    x$TRW_propTRW2021_mod <- x$TRW_propTRW2021  }
-  return(x)
-}) #############la nueva columna "TRW_propTRW2021_mod" significa: si el valor de TRW en cierta fecha es menor que la anterior fecha a un 80%, me posiciona el valor anterior, así identifico mejor los valores anomalos
+  y <- 1
+  x$TRW2021mod <- x$TRW_propTRW2021
+  while(y < length(x$indv)){
+    y <- y +1
+    
+    x$TRW2021mod[y] <- ifelse(x$TRW2021mod[y] < x$TRW2021mod[y - 1], x$TRW2021mod[y - 1], x$TRW2021mod[y])}
+    return(x)
+    }) #"TRW2021mod" corrijo todas las mediciones donde cuando se produce un "decrecimiento" lo asumo como una contracción de la madera, por lo cual lo sustituyo por el valor anterior mayor
 
-#####modifico los valores anomalos, donde si es mucho mayor pongo el valor de TRW la fecha siguiente
-TRW_2021$`52`$TRW_propTRW2021_mod[7] <- TRW_2021$`52`$TRW_propTRW2021_mod[8]
-TRW_2021$`36`$TRW_propTRW2021_mod[9] <- TRW_2021$`36`$TRW_propTRW2021_mod[10]
-TRW_2021$`19`$TRW_propTRW2021_mod[9] <- TRW_2021$`19`$TRW_propTRW2021_mod[10] 
-TRW_2021$`18`$TRW_propTRW2021_mod[10] <- TRW_2021$`19`$TRW_propTRW2021_mod[11]
-TRW_2021$`10`$TRW_propTRW2021_mod[6] <- TRW_2021$`10`$TRW_propTRW2021_mod[7]
-TRW_2021$`3`$TRW_propTRW2021_mod[10] <- TRW_2021$`3`$TRW_propTRW2021_mod[11]
-TRW_2021$`8`$TRW_propTRW2021_mod[5] <- TRW_2021$`8`$TRW_propTRW2021_mod[6]
-TRW_2021$`19`$TRW_propTRW2021_mod[13] <- TRW_2021$`19`$TRW_propTRW2021_mod[12]
+
 
 TRW_2021 <- lapply(TRW_2021, function(x){
    
-  x$diference_TRW <- c(diference_0, diff(x$TRW_propTRW2021_mod))
+  x$diference_TRW <- c(diference_0, diff(x$TRW2021mod))
   x$TRWday_micras <- (x$diference_TRW/x$diference_Date)*1000 ###si sale negativo por mas de 5 micras que me lo devuelva para revisar
   x$TRWday_micras[1] <- 0
   x$TRWday_micras <- ifelse(x$TRWday_micras < 0, 0, x$TRWday_micras)
   
   return(x)
-}) #####hago el incremento de TRW diario en micras (leer los comentarios interiores) AQUI SE VEN LO DE LOS NUMEROS NEGATIVOS 
+}) #####hago el incremento de TRW diario en micras (leer los comentarios interiores)
 
+##hago el crecimiento estandarizado
+TRW_2021 <- lapply(TRW_2021, function(x){
+  x$TRWstandard <- x$TRW2021mod/x$TRW2021mod[length(x$TRW2021mod)]
+  x$diference_TRWstandard <- c(diference_0, diff(x$TRWstandard))
+  
+  
+  return(x)
+})
+
+########hace falta añadir el primer crecimiento y fecha anterior con 0
+
+###crecimiento diario estandarizado
  
 TRW_2021 <- do.call(rbind, Map(data.frame, TRW_2021)) ####lo uno todo
 
 TRW_2021$treatment <- ifelse(TRW_2021$indv %in% control, "control", "drought")
 
 
-ggplot(TRW_2021, aes(x=date, y=TRWday_micras, colour = treatment))+
+ggplot(TRW_2021, aes(x=date, y=diference_TRWstandard, colour = treatment))+
+  geom_point()+
+  geom_smooth()
+ggplot(TRW_2021, aes(x=date, y=TRWstandard, colour = treatment))+
   geom_point()+
   geom_smooth()
 
@@ -886,8 +910,8 @@ ggplot(TRW_2021, aes(x=date, y=TRWday_micras, colour = treatment))+
 ########modelos de crecimiento
 TRW_2021$date_1 <- as.numeric(TRW_2021$date)
 modelo1 <- gamm(
-  log(TRWday_micras + 1) ~ treatment +
-                  s( date_1, k= 13, bs= "ts", m= 5) +        # curvas temporal separadas por tratamiento
+  log(diference_TRWstandard + 1) ~ treatment +
+                  s( date_1, k= 13, bs= "ts", m= 5,by= as.factor(treatment) ) +        # curvas temporal separadas por tratamiento
                   scale(Pci) +                       # efecto  lineal del patógeno
                   scale(H_.cm.) + scale(Diametro_copa_.cm.),           # covariables lineales
   random = list(indv = ~1),                       # interceptos aleatorios por árbol
@@ -895,23 +919,23 @@ modelo1 <- gamm(
   data = TRW_2021,
   method = "REML")
 modelo2 <- gamm(
-  log(TRWday_micras + 1) ~ treatment +
-                  s( date_1, k= 13, bs= "ts", m= 5) +        
+  log(diference_TRWstandard + 1) ~ treatment +
+                  s( date_1, k= 13, bs= "ts", m= 5,by= as.factor(treatment)) +        
                   scale(H_.cm.) + scale(Diametro_copa_.cm.),          
   random = list(indv = ~1),                       
   correlation = corAR1(form = ~ date_1 | indv),   
   data = TRW_2021,
   method = "REML")
 modelo3 <- gamm(
-  log(TRWday_micras + 1) ~ treatment +          
-                  s( date_1, k= 13, bs= "ts", m= 5),      ####le puedo poner bs= "ts" para que empiece en y= 0, pero debe de tener m=10   
+  log(diference_TRWstandard + 1) ~ treatment +          
+                  s( date_1, k= 13, bs= "ts", m= 5, by= as.factor(treatment)),      ####le puedo poner bs= "ts" para que empiece en y= 0, pero debe de tener m=10   
   random = list(indv = ~1),                       
   correlation = corAR1(form = ~ date_1 | indv),   
   data = TRW_2021,
   method = "REML")
 modelo4 <- gamm(
-  log(TRWday_micras + 1) ~ treatment +
-                 s( date_1, k= 13, bs= "ts", m= 5) +       
+  log(diference_TRWstandard + 1) ~ treatment +
+                 s( date_1, k= 13, bs= "ts", m= 5,by= as.factor(treatment)) +       
                   scale(Pci),                    
   random = list(indv = ~1),                       
   correlation = corAR1(form = ~ date_1 | indv),   
@@ -937,8 +961,9 @@ newdata <- data.frame(date_1=rep(seq(min(TRW_2021$date_1, na.rm=T),max(TRW_2021$
 model_growth <- predict(modelo3, newdata, se.fit= T)
 newdata$predict <- model_growth$fit
 newdata$CI <- model_growth$se.fit
-ggplot()+
-  geom_point(data = TRW_2021, aes(x= as.Date(date_1), y= log(TRWday_micras + 1), colour = treatment))+
+
+modelo_diference_TRWstandard <-  ggplot()+
+  geom_point(data = TRW_2021, aes(x= as.Date(date_1), y= log(diference_TRWstandard + 1), colour = treatment))+
   geom_line(data = newdata, aes(x= as.Date(date_1), y=predict, colour = treatment))+
   geom_ribbon(data = newdata, alpha=.4,mapping = aes(x=as.Date(date_1), ymin=predict-CI, ymax=predict+CI, fill=treatment))+
     scale_color_manual(values = c("#1E90FF","#FF4040"))+
@@ -950,10 +975,111 @@ ggplot()+
         axis.ticks.length  = unit(0.1, "cm"))+
   geom_hline(yintercept= 0)
 
-ggplot(data = TRW_2021, aes(x= as.Date(date_1), y= log(TRW_propTRW2021_mod + 1), colour = treatment))+
-  geom_point()+
-  geom_smooth()
-############enseñarselo a Mati
+modelo_diference_TRWstandard_1 <-  ggplot()+
+  geom_line(data = newdata, aes(x= as.Date(date_1), y=predict, colour = treatment))+
+  geom_ribbon(data = newdata, alpha=.4,mapping = aes(x=as.Date(date_1), ymin=predict-CI, ymax=predict+CI, fill=treatment))+
+    scale_color_manual(values = c("#1E90FF","#FF4040"))+
+  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text = element_text(color = "black",size = 12),
+        axis.ticks.length  = unit(0.1, "cm"))
+
+
+modelo_diference_TRWstandard_1
+############grafica supporting
+modelo_crecimiento <- gamm(
+  TRWstandard ~ treatment +          
+                  s( date_1, k= 13, bs= "ts", m= 5, by= as.factor(treatment)),      ####le puedo poner bs= "ts" para que empiece en y= 0, pero debe de tener m=10   
+  random = list(indv = ~1),                       
+  correlation = corAR1(form = ~ date_1 | indv),   
+  data = TRW_2021,
+  method = "REML")
+
+
+
+newdata <- data.frame(date_1=rep(seq(min(TRW_2021$date_1, na.rm=T),max(TRW_2021$date_1, na.rm=T),length.out = nrow(TRW_2021)), 2),
+           treatment = rep(c("control", "drought"), each = nrow(TRW_2021)),
+           indv = 2)
+
+model_growth <- predict(modelo_crecimiento, newdata, se.fit= T)
+newdata$predict <- model_growth$fit
+newdata$CI <- model_growth$se.fit
+
+modelo_TRWstandard <- ggplot()+
+  geom_point(data = TRW_2021, aes(x= as.Date(date_1), y= TRWstandard, colour = treatment))+
+  geom_line(data = newdata, aes(x= as.Date(date_1), y=predict, colour = treatment))+
+  geom_ribbon(data = newdata, alpha=.4,mapping = aes(x=as.Date(date_1), ymin=predict-CI, ymax=predict+CI, fill=treatment))+
+    scale_color_manual(values = c("#1E90FF","#FF4040"))+
+  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text = element_text(color = "black",size = 12),
+        axis.ticks.length  = unit(0.1, "cm"))+
+  geom_hline(yintercept= 0)
+
+modelo_diference_TRWstandard
+modelo_TRWstandard
+
+###test de bimodalidad (no lo parece) ###hay pico de crecimiento en control pero no en sequia
+
+library(gratia)
+
+der_control <- derivatives(
+  modelo3$gam,
+  term = "s(date_1):as.factor(treatment)control")
+der_sequia <- derivatives(
+  modelo3$gam,
+  term = "s(date_1):as.factor(treatment)drought")
+
+der_control$sing <-  ifelse(der_control$.derivative <0, -1, 1)
+der_sequia$sing <-  ifelse(der_sequia$.derivative <0, -1, 1)
+
+der_treatment <- list("der_control" = der_control, "der_sequia"= der_sequia )
+
+lapply(der_treatment, function(x){
+  ggplot(as.data.frame(x), aes(x=date_1, y= sing))+
+    geom_point()
+  
+})
+
+###prueba con crecimiento observado sin estandarizar
+# modelo_crecimiento <- gamm(
+#   TRWday_micras ~ treatment +          
+#                   s( date_1, k= 13, bs= "ts", m= 5, by= as.factor(treatment)),      ####le puedo poner bs= "ts" para que empiece en y= 0, pero debe de tener m=10   
+#   random = list(indv = ~1),                       
+#   correlation = corAR1(form = ~ date_1 | indv),   
+#   data = TRW_2021,
+#   method = "REML")
+# 
+# 
+# 
+# newdata <- data.frame(date_1=rep(seq(min(TRW_2021$date_1, na.rm=T),max(TRW_2021$date_1, na.rm=T),length.out = nrow(TRW_2021)), 2),
+#            treatment = rep(c("control", "drought"), each = nrow(TRW_2021)),
+#            indv = 2)
+# 
+# model_growth <- predict(modelo_crecimiento, newdata, se.fit= T)
+# newdata$predict <- model_growth$fit
+# newdata$CI <- model_growth$se.fit
+# 
+# 
+# ggplot()+
+#   geom_point(data = TRW_2021, aes(x= as.Date(date_1), y= TRWday_micras, colour = treatment))+
+#   geom_line(data = newdata, aes(x= as.Date(date_1), y=predict, colour = treatment))+
+#   geom_ribbon(data = newdata, alpha=.4,mapping = aes(x=as.Date(date_1), ymin=predict-CI, ymax=predict+CI, fill=treatment))+
+#     scale_color_manual(values = c("#1E90FF","#FF4040"))+
+#   scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
+#   theme(panel.background = element_rect(fill = "white"),
+#           axis.line.x = element_line(colour="black"),
+#           axis.line.y = element_line(colour="black"),
+#         axis.text = element_text(color = "black",size = 12),
+#         axis.ticks.length  = unit(0.1, "cm"))+
+#   geom_hline(yintercept= 0)
+
+
+
 
 ```
 
