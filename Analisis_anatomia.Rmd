@@ -14,6 +14,7 @@ library(performance)
 library(ggplot2)
 library(readr)
 library(itsadug)
+library(gratia)
 library(data.table)
 library(moments)
 library(tidyverse)
@@ -809,8 +810,6 @@ TRW_2021 <- merge(TRW_2021,Minicore_fielddata$Datos_pie, by=c("indv"))
 TRW_2021 <- TRW_2021[!names(TRW_2021) %in% c("Plot.x", "Plot.y","Finca","Tratam","Especie","Árbol")]
 
 
-ggplot(data = TRW_2021, aes(x=date, y=TRW_mean, colour = treatment))+ geom_point()+
-  geom_smooth()
 
 
 ####ahora calculo el TRW diario entre fechas
@@ -872,25 +871,33 @@ TRW_2021 <- lapply(TRW_2021, function(x){
 
 
 TRW_2021 <- lapply(TRW_2021, function(x){
-   
-  x$diference_TRW <- c(diference_0, diff(x$TRW2021mod))
-  x$TRWday_micras <- (x$diference_TRW/x$diference_Date)*1000 ###si sale negativo por mas de 5 micras que me lo devuelva para revisar
-  x$TRWday_micras[1] <- 0
-  x$TRWday_micras <- ifelse(x$TRWday_micras < 0, 0, x$TRWday_micras)
   
+  x$diference_TRW <- c(diference_0, diff(x$TRW2021mod))
+  x$TRWday_micras <- (x$diference_TRW/x$diference_Date)*1000
+  x$TRWday_micras[1] <- x$TRW2021mod[1]
+  x$diference_TRW[1] <- x$TRW2021mod[1]
+  x$TRWday_micras <- ifelse(x$TRWday_micras < 0, 0, x$TRWday_micras)
+  ###creo la columna anterior con valores 0 crecimiento
+  x <- rbind(x, x[rep(1,1), ])
+  x <-  x[with(x, order(x$date)), ]
+  x$date[1] <- as.Date("18-03-21", format= "%d-%m-%y")
+  cols_to_zero <- setdiff(colnames(x), c("indv","date", "Pci", "treatment", "DBH_(cm)","H_(cm)","Diametro_copa_(cm)" ))
+  x[x$date == as.Date("18-03-21", format= "%d-%m-%y"), cols_to_zero] <- 0
+  x <- rbind(x, x[rep(1,1), ])
+  x <-  x[with(x, order(x$date)), ]
+  x$date[1] <- as.Date("01-03-21", format= "%d-%m-%y")
   return(x)
-}) #####hago el incremento de TRW diario en micras (leer los comentarios interiores)
+}) #####hago el incremento de TRW diario en micras y creo una fila con la fecha anterior con 0 en crecimiento
+
 
 ##hago el crecimiento estandarizado
 TRW_2021 <- lapply(TRW_2021, function(x){
   x$TRWstandard <- x$TRW2021mod/x$TRW2021mod[length(x$TRW2021mod)]
   x$diference_TRWstandard <- c(diference_0, diff(x$TRWstandard))
   
-  
   return(x)
 })
 
-########hace falta añadir el primer crecimiento y fecha anterior con 0
 
 ###crecimiento diario estandarizado
  
@@ -901,9 +908,11 @@ TRW_2021$treatment <- ifelse(TRW_2021$indv %in% control, "control", "drought")
 
 ggplot(TRW_2021, aes(x=date, y=diference_TRWstandard, colour = treatment))+
   geom_point()+
-  geom_smooth()
+  geom_smooth()+
+  scale_color_manual(values = c("#1E90FF","#FF4040"))
 ggplot(TRW_2021, aes(x=date, y=TRWstandard, colour = treatment))+
   geom_point()+
+   scale_color_manual(values = c("#1E90FF","#FF4040"))+
   geom_smooth()
 
 
@@ -911,7 +920,7 @@ ggplot(TRW_2021, aes(x=date, y=TRWstandard, colour = treatment))+
 TRW_2021$date_1 <- as.numeric(TRW_2021$date)
 modelo1 <- gamm(
   log(diference_TRWstandard + 1) ~ treatment +
-                  s( date_1, k= 13, bs= "ts", m= 5,by= as.factor(treatment) ) +        # curvas temporal separadas por tratamiento
+                  s( date_1, k= 10, bs= "ts", m= 1, by= as.factor(treatment)) +        # curvas temporal separadas por tratamiento
                   scale(Pci) +                       # efecto  lineal del patógeno
                   scale(H_.cm.) + scale(Diametro_copa_.cm.),           # covariables lineales
   random = list(indv = ~1),                       # interceptos aleatorios por árbol
@@ -920,22 +929,23 @@ modelo1 <- gamm(
   method = "REML")
 modelo2 <- gamm(
   log(diference_TRWstandard + 1) ~ treatment +
-                  s( date_1, k= 13, bs= "ts", m= 5,by= as.factor(treatment)) +        
+                  s( date_1, k= 10, bs= "ts", m= 1, by= as.factor(treatment)) +        
                   scale(H_.cm.) + scale(Diametro_copa_.cm.),          
   random = list(indv = ~1),                       
   correlation = corAR1(form = ~ date_1 | indv),   
   data = TRW_2021,
   method = "REML")
+
 modelo3 <- gamm(
   log(diference_TRWstandard + 1) ~ treatment +          
-                  s( date_1, k= 13, bs= "ts", m= 5, by= as.factor(treatment)),      ####le puedo poner bs= "ts" para que empiece en y= 0, pero debe de tener m=10   
+                  s( date_1, k= 10, bs= "ts", m= 1, by= as.factor(treatment)),      ####le puedo poner bs= "ts" para que empiece en y= 0, pero debe de tener m=10   
   random = list(indv = ~1),                       
   correlation = corAR1(form = ~ date_1 | indv),   
   data = TRW_2021,
   method = "REML")
 modelo4 <- gamm(
   log(diference_TRWstandard + 1) ~ treatment +
-                 s( date_1, k= 13, bs= "ts", m= 5,by= as.factor(treatment)) +       
+                 s( date_1, k= 10, bs= "ts", m= 1, by= as.factor(treatment)) +       
                   scale(Pci),                    
   random = list(indv = ~1),                       
   correlation = corAR1(form = ~ date_1 | indv),   
@@ -956,7 +966,7 @@ summary(modelo3$gam)
 
 newdata <- data.frame(date_1=rep(seq(min(TRW_2021$date_1, na.rm=T),max(TRW_2021$date_1, na.rm=T),length.out = nrow(TRW_2021)), 2),
            treatment = rep(c("control", "drought"), each = nrow(TRW_2021)),
-           indv = 2)
+           indv = 5)
 
 model_growth <- predict(modelo3, newdata, se.fit= T)
 newdata$predict <- model_growth$fit
@@ -974,7 +984,7 @@ modelo_diference_TRWstandard <-  ggplot()+
         axis.text = element_text(color = "black",size = 12),
         axis.ticks.length  = unit(0.1, "cm"))+
   geom_hline(yintercept= 0)
-
+modelo_diference_TRWstandard
 modelo_diference_TRWstandard_1 <-  ggplot()+
   geom_line(data = newdata, aes(x= as.Date(date_1), y=predict, colour = treatment))+
   geom_ribbon(data = newdata, alpha=.4,mapping = aes(x=as.Date(date_1), ymin=predict-CI, ymax=predict+CI, fill=treatment))+
@@ -987,21 +997,46 @@ modelo_diference_TRWstandard_1 <-  ggplot()+
         axis.ticks.length  = unit(0.1, "cm"))
 
 
+modelo_diference_TRWstandard
 modelo_diference_TRWstandard_1
-############grafica supporting
-modelo_crecimiento <- gamm(
-  TRWstandard ~ treatment +          
-                  s( date_1, k= 13, bs= "ts", m= 5, by= as.factor(treatment)),      ####le puedo poner bs= "ts" para que empiece en y= 0, pero debe de tener m=10   
+############grafica supporting ###############PREGUNTAR SI LO HAGO DE MANERA GOMPERZT PERO TENGO DUDA DE FALSEAR DATOS TRAS FEBRERO
+modelo_crecimiento <- gamm(  TRWstandard ~ treatment +   
+                  s( date_1, k= 10, bs= "ts", m= 5, by= as.factor(treatment)),      ####le puedo poner bs= "ts" para que empiece en y= 0, pero debe de tener m=10   
   random = list(indv = ~1),                       
   correlation = corAR1(form = ~ date_1 | indv),   
   data = TRW_2021,
   method = "REML")
 
+modelo_crecimiento_indv <- gam(  TRWstandard ~ indv + s( date_1, k= 10, bs= "ts", m= 5, by= as.factor(indv)), data = TRW_2021,method = "REML")
 
 
+###creo los datos para los predicts
 newdata <- data.frame(date_1=rep(seq(min(TRW_2021$date_1, na.rm=T),max(TRW_2021$date_1, na.rm=T),length.out = nrow(TRW_2021)), 2),
            treatment = rep(c("control", "drought"), each = nrow(TRW_2021)),
            indv = 2)
+indv <- unique(TRW_2021$indv)
+
+x <- 0
+newdata_indv <- list()
+while(x < length(indv)){
+  x <- x+1
+  newdata_indv[[x]] <- data.frame(newdata, "indv" = indv[x])
+}
+newdata_indv <- lapply(newdata_indv, function(x){
+  x$indv <- NULL
+  x$treatment <- ifelse(x$treatment == "control", NA, x$treatment )
+  x <- x[complete.cases(x$treatment), ]
+  x$treatment <- NULL
+  x$indv <- x$indv.1
+  return(x)
+
+})
+newdata_indv <- do.call(rbind, Map(data.frame,newdata_indv))
+model_growth_indv <- predict(modelo_crecimiento_indv, newdata_indv, se.fit= T)
+newdata_indv$predict <- model_growth_indv$fit
+newdata_indv$CI <- model_growth_indv$se.fit
+newdata_indv$treatment <- ifelse(newdata_indv$indv %in% control, "control", "drought")
+
 
 model_growth <- predict(modelo_crecimiento, newdata, se.fit= T)
 newdata$predict <- model_growth$fit
@@ -1017,15 +1052,27 @@ modelo_TRWstandard <- ggplot()+
           axis.line.x = element_line(colour="black"),
           axis.line.y = element_line(colour="black"),
         axis.text = element_text(color = "black",size = 12),
-        axis.ticks.length  = unit(0.1, "cm"))+
-  geom_hline(yintercept= 0)
+        axis.ticks.length  = unit(0.1, "cm"))
 
-modelo_diference_TRWstandard
+modelo_TRWstandard_1 <- ggplot()+
+   geom_line(data = newdata_indv , aes(x= as.Date(date_1), y= as.numeric(predict), colour = treatment,
+                                       group = interaction(as.factor(indv), treatment)), alpha = 0.4, lwd= 0.7)+
+  geom_line(data = newdata, aes(x= as.Date(date_1), y=predict, colour = treatment), lwd= 1.5)+
+    scale_color_manual(values = c("#1E90FF","#FF4040"))+
+  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text = element_text(color = "black",size = 12),
+        axis.ticks.length  = unit(0.1, "cm"))
+  
+modelo_TRWstandard_1
 modelo_TRWstandard
+modelo_diference_TRWstandard
 
 ###test de bimodalidad (no lo parece) ###hay pico de crecimiento en control pero no en sequia
 
-library(gratia)
+
 
 der_control <- derivatives(
   modelo3$gam,
@@ -1079,7 +1126,7 @@ lapply(der_treatment, function(x){
 #   geom_hline(yintercept= 0)
 
 
-
+rm(der_control, der_sequia, modelo1, modelo2, modelo3, modelo4, modelo_crecimiento, newdata, newdata_indv, df, der_treatment)
 
 ```
 
@@ -1098,37 +1145,37 @@ split(ver_crecimiento, ver_crecimiento$indv)
 ```
 
 ```{r cargar todos los Cortes_Qca, include=FALSE}
-# ####1-ABRIL-2021
-# paths <- c("C:/Minicores/Qca_Bruto/ImageJ/Tablas/c1-4-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/d15-4-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/e29-4-2021","C:/minicores/Qca_Bruto/ImageJ/Tablas/n13-5-21", "C:/Minicores/Qca_Bruto/ImageJ/Tablas/o27-5-21",      "C:/Minicores/Qca_Bruto/ImageJ/Tablas/f10-6-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/g22-7-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/h9-9-2021",
-#            "C:/Minicores/Qca_Bruto/ImageJ/Tablas/i14-10-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/j18-11-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/K16-12-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/l19-1-2022","C:/Minicores/Qca_Bruto/ImageJ/Tablas/m8-2-2022")
-# 
-# fechas <- c("1-4-21", "15-4-21","29-4-21","13-5-21","27-5-21","10-6-21","22-7-21","9-9-21","14-10-21","18-11-21","16-12-21","19-1-22","8-2-22")
-# 
-# 
-# x <- 0
-# vessel_imageJ <- list()
-# while(x < length(paths)){
-#   x <- x +1
-#   setwd(paths[x])
-#   name_documents <- list.files(pattern = '*.csv')
-# vessel_imageJ[[x]] <- lapply(name_documents, read_delim, delim = ',')
-#   names(vessel_imageJ[[x]]) <- name_documents
-#   
-#   y <- 0
-#   while(y < length(name_documents)){
-#     y <- y +1
-#     vessel_imageJ[[x]][[y]]$indv <- name_documents[y]
-#     vessel_imageJ[[x]][[y]]$date <- as.Date( fechas[x], format = "%d-%m-%y")
-#     }}
-# names(vessel_imageJ) <- fechas
-#                                                   
-# vessel_imageJ <- lapply(vessel_imageJ, function(x){
-#   
-#   x <- lapply(x, function(y){
-#     y$indv <- stringr::str_extract(y$indv, "\\d+")  
-#     return(y)})
-#   return(x)})
-# 
+####1-ABRIL-2021
+paths <- c("C:/Minicores/Qca_Bruto/ImageJ/Tablas/c1-4-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/d15-4-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/e29-4-2021","C:/minicores/Qca_Bruto/ImageJ/Tablas/n13-5-21", "C:/Minicores/Qca_Bruto/ImageJ/Tablas/o27-5-21",      "C:/Minicores/Qca_Bruto/ImageJ/Tablas/f10-6-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/g22-7-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/h9-9-2021",
+           "C:/Minicores/Qca_Bruto/ImageJ/Tablas/i14-10-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/j18-11-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/K16-12-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/l19-1-2022","C:/Minicores/Qca_Bruto/ImageJ/Tablas/m8-2-2022")
+
+fechas <- c("1-4-21", "15-4-21","29-4-21","13-5-21","27-5-21","10-6-21","22-7-21","9-9-21","14-10-21","18-11-21","16-12-21","19-1-22","8-2-22")
+
+
+x <- 0
+vessel_imageJ <- list()
+while(x < length(paths)){
+  x <- x +1
+  setwd(paths[x])
+  name_documents <- list.files(pattern = '*.csv')
+vessel_imageJ[[x]] <- lapply(name_documents, read_delim, delim = ',')
+  names(vessel_imageJ[[x]]) <- name_documents
+
+  y <- 0
+  while(y < length(name_documents)){
+    y <- y +1
+    vessel_imageJ[[x]][[y]]$indv <- name_documents[y]
+    vessel_imageJ[[x]][[y]]$date <- as.Date( fechas[x], format = "%d-%m-%y")
+    }}
+names(vessel_imageJ) <- fechas
+
+vessel_imageJ <- lapply(vessel_imageJ, function(x){
+
+  x <- lapply(x, function(y){
+    y$indv <- stringr::str_extract(y$indv, "\\d+")
+    return(y)})
+  return(x)})
+
 # saveRDS(vessel_imageJ, file = "vessel_Data.rds")
 
 
@@ -1140,34 +1187,39 @@ split(ver_crecimiento, ver_crecimiento$indv)
 
 ```{r cojo los vasos por fecha, include=FALSE}
 ###reorganizo el df
-newvessel <- vessel_imageJ 
-
-newvessel <- lapply(newvessel, function(x){
-  x <- lapply(x, function(y){
-    y <- data.frame("N_vessel" = y$` `, "Feret" = y$Feret, "indv"= y$indv, "date" = y$date)
-    return(y)
-  })
-  
-  x <- do.call(rbind, Map(data.frame, x))
-  return(x)})
-newvessel <- do.call(rbind, Map(data.frame, newvessel))
-newvessel <- split(newvessel, newvessel$indv)
-newvessel <- lapply(newvessel, function(x){
-  x <- split(x, x$date)
-  return(x)})
-##indv2
-
-contiene_13My <- c(4)
+# newvessel <- vessel_imageJ 
+# 
+# newvessel <- lapply(newvessel, function(x){
+#   x <- lapply(x, function(y){
+#     y <- data.frame("N_vessel" = y$` `, "Feret" = y$Feret, "indv"= y$indv, "date" = y$date)
+#     return(y)
+#   })
+#   
+#   x <- do.call(rbind, Map(data.frame, x))
+#   return(x)})
+# newvessel <- do.call(rbind, Map(data.frame, newvessel))
+# newvessel <- split(newvessel, newvessel$indv)
+# newvessel <- lapply(newvessel, function(x){
+#   x <- split(x, x$date)
+#   return(x)})
+# ##indv2
+# contiene_13My <- c(4)
+# newvessel$`2`$`2021-05-27` <- NULL
+# newvessel$`2`$`2021-06-10`<- NULL
+# contiene_22Jul <- c(2,9)
+# contiene_9sep <- c(6,3,2,7,5,11,12,14,16,19,20,21,24,23)
+# contiene_14Oct <- c(1,2,3,4,5)
+# newvessel$`2`$`2021-11-18` <- NULL
+# contiene_16Dic <- c(4,7,13,20,24,25)
+# newvessel$`2`$`2022-02-08` <- NULL
+# 
+# newvessel$`2`$`2021-05-13`$N_vessel  <- ifelse(newvessel$`2`$`2021-05-13`$N_vessel  %in% contiene_13My, newvessel$`2`$`2021-05-13`$N_vessel , NA)
+# newvessel$`2`$`2021-07-22`$N_vessel  <- ifelse(newvessel$`2`$`2021-07-22`$N_vessel  %in% contiene_22Jul, newvessel$`2`$`2021-07-22`$N_vessel , NA)
+# newvessel$`2`$`2021-09-09`$N_vessel  <- ifelse(newvessel$`2`$`2021-09-09`$N_vessel  %in% contiene_9sep, newvessel$`2`$`2021-09-09`$N_vessel , NA)
+# newvessel$`2`$`2021-10-14`$N_vessel  <- ifelse(newvessel$`2`$`2021-10-14`$N_vessel  %in% contiene_14Oct, newvessel$`2`$`2021-10-14`$N_vessel , NA)
+# newvessel$`2`$`2021-12-16`$N_vessel  <- ifelse(newvessel$`2`$`2021-12-16`$N_vessel  %in% contiene_16Dic, newvessel$`2`$`2021-12-16`$N_vessel , NA)
 
 ####me he quedado aqui
-
-
-contiene <- list(contiene_13My, )
-x <- 0
-while(x < length(newvessel[[1]])){
-  x <- x+1
-  newvessel[[x]]$N_vessel <- ifelse(newvessel[[x]]$N_vessel %in% contiene[[x]], newvessel[[x]]$N_vessel, NA)
-}
 
 
 
