@@ -92,7 +92,8 @@ Qca2020_21 <- readRDS("Qca2020_21.rds")
 ###patogenos
 Minicore_fielddata$phytophthora <- read_xlsx("Patogenos_y_textura.xlsx", sheet = "Gamir")
 
-vessel_imageJ <- readRDS("vessel_Data.rds") ########datos de todos los vasos de imageJ
+# vessel_imageJ <- readRDS("vessel_Data.rds") ########datos de todos los vasos de imageJ
+new_vess <- read_excel_allsheets("Tabla_Nvasosnuevos.xlsx")
 ```
 
 ```{r clima, include=FALSE}
@@ -1131,215 +1132,75 @@ rm(der_control, der_sequia, modelo1, modelo2, modelo3, modelo4, modelo_crecimien
 ```
 
 ```{r veo cuanto y cuando ha crecido los indv por fecha, include=FALSE}
-###lo hago previo para poder escoger los vasos y el area nuevo
-ver_crecimiento <- data.frame(indv= TRW_2021$indv,  date = TRW_2021$date, TRW_2021 = TRW_2021$TRW_mean, TRW_2020 = TRW_2021$TRW_2020,diference_TRW= TRW_2021$diference_TRW, TRWday_micras= TRW_2021$TRWday_micras)
-
-ver_crecimiento$TRWday_micras <-  ifelse(ver_crecimiento$TRWday_micras == 0, NA, ver_crecimiento$TRWday_micras)
-
-ver_crecimiento <- ver_crecimiento[complete.cases(ver_crecimiento$TRWday_micras), ]
-
-ver_crecimiento$TRWdiffcorr <- ver_crecimiento$diference_TRW* ver_crecimiento$TRW_2020
-
-split(ver_crecimiento, ver_crecimiento$indv)
+# ###lo hago previo para poder escoger los vasos y el area nuevo
+# ver_crecimiento <- data.frame(indv= TRW_2021$indv,  date = TRW_2021$date, TRW_2021 = TRW_2021$TRW_mean, TRW_2020 = TRW_2021$TRW_2020,diference_TRW= TRW_2021$diference_TRW, TRWday_micras= TRW_2021$TRWday_micras)
+# 
+# ver_crecimiento$TRWday_micras <-  ifelse(ver_crecimiento$TRWday_micras == 0, NA, ver_crecimiento$TRWday_micras)
+# 
+# ver_crecimiento <- ver_crecimiento[complete.cases(ver_crecimiento$TRWday_micras), ]
+# 
+# ver_crecimiento$TRWdiffcorr <- ver_crecimiento$diference_TRW* ver_crecimiento$TRW_2020
+# 
+# split(ver_crecimiento, ver_crecimiento$indv)
 
 ```
 
 ```{r cargar todos los Cortes_Qca, include=FALSE}
 ####1-ABRIL-2021
-paths <- c("C:/Minicores/Qca_Bruto/ImageJ/Tablas/c1-4-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/d15-4-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/e29-4-2021","C:/minicores/Qca_Bruto/ImageJ/Tablas/n13-5-21", "C:/Minicores/Qca_Bruto/ImageJ/Tablas/o27-5-21",      "C:/Minicores/Qca_Bruto/ImageJ/Tablas/f10-6-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/g22-7-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/h9-9-2021",
-           "C:/Minicores/Qca_Bruto/ImageJ/Tablas/i14-10-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/j18-11-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/K16-12-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/l19-1-2022","C:/Minicores/Qca_Bruto/ImageJ/Tablas/m8-2-2022")
-
-fechas <- c("1-4-21", "15-4-21","29-4-21","13-5-21","27-5-21","10-6-21","22-7-21","9-9-21","14-10-21","18-11-21","16-12-21","19-1-22","8-2-22")
-
-
-x <- 0
-vessel_imageJ <- list()
-while(x < length(paths)){
-  x <- x +1
-  setwd(paths[x])
-  name_documents <- list.files(pattern = '*.csv')
-vessel_imageJ[[x]] <- lapply(name_documents, read_delim, delim = ',')
-  names(vessel_imageJ[[x]]) <- name_documents
-
-  y <- 0
-  while(y < length(name_documents)){
-    y <- y +1
-    vessel_imageJ[[x]][[y]]$indv <- name_documents[y]
-    vessel_imageJ[[x]][[y]]$date <- as.Date( fechas[x], format = "%d-%m-%y")
-    }}
-names(vessel_imageJ) <- fechas
-
-vessel_imageJ <- lapply(vessel_imageJ, function(x){
-
-  x <- lapply(x, function(y){
-    y$indv <- stringr::str_extract(y$indv, "\\d+")
-    return(y)})
-  return(x)})
-
-# saveRDS(vessel_imageJ, file = "vessel_Data.rds")
-
-
-
-
-
-
-```
-
-```{r cojo los vasos por fecha, include=FALSE}
-###reorganizo el df
-# newvessel <- vessel_imageJ 
+# paths <- c("C:/Minicores/Qca_Bruto/ImageJ/Tablas/c1-4-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/d15-4-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/e29-4-2021","C:/minicores/Qca_Bruto/ImageJ/Tablas/n13-5-21", "C:/Minicores/Qca_Bruto/ImageJ/Tablas/o27-5-21",      "C:/Minicores/Qca_Bruto/ImageJ/Tablas/f10-6-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/g22-7-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/h9-9-2021",
+#            "C:/Minicores/Qca_Bruto/ImageJ/Tablas/i14-10-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/j18-11-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/K16-12-2021","C:/Minicores/Qca_Bruto/ImageJ/Tablas/l19-1-2022","C:/Minicores/Qca_Bruto/ImageJ/Tablas/m8-2-2022")
 # 
-# newvessel <- lapply(newvessel, function(x){
+# fechas <- c("1-4-21", "15-4-21","29-4-21","13-5-21","27-5-21","10-6-21","22-7-21","9-9-21","14-10-21","18-11-21","16-12-21","19-1-22","8-2-22")
+# 
+# 
+# x <- 0
+# vessel_imageJ <- list()
+# while(x < length(paths)){
+#   x <- x +1
+#   setwd(paths[x])
+#   name_documents <- list.files(pattern = '*.csv')
+# vessel_imageJ[[x]] <- lapply(name_documents, read_delim, delim = ',')
+#   names(vessel_imageJ[[x]]) <- name_documents
+# 
+#   y <- 0
+#   while(y < length(name_documents)){
+#     y <- y +1
+#     vessel_imageJ[[x]][[y]]$indv <- name_documents[y]
+#     vessel_imageJ[[x]][[y]]$date <- as.Date( fechas[x], format = "%d-%m-%y")
+#     }}
+# names(vessel_imageJ) <- fechas
+# 
+# vessel_imageJ <- lapply(vessel_imageJ, function(x){
+# 
 #   x <- lapply(x, function(y){
-#     y <- data.frame("N_vessel" = y$` `, "Feret" = y$Feret, "indv"= y$indv, "date" = y$date)
-#     return(y)
-#   })
-#   
-#   x <- do.call(rbind, Map(data.frame, x))
+#     y$indv <- stringr::str_extract(y$indv, "\\d+")
+#     return(y)})
 #   return(x)})
-# newvessel <- do.call(rbind, Map(data.frame, newvessel))
-# newvessel <- split(newvessel, newvessel$indv)
-# newvessel <- lapply(newvessel, function(x){
-#   x <- split(x, x$date)
-#   return(x)})
-# ##indv2
-# contiene_13My <- c(4)
-# newvessel$`2`$`2021-05-27` <- NULL
-# newvessel$`2`$`2021-06-10`<- NULL
-# contiene_22Jul <- c(2,9)
-# contiene_9sep <- c(6,3,2,7,5,11,12,14,16,19,20,21,24,23)
-# contiene_14Oct <- c(1,2,3,4,5)
-# newvessel$`2`$`2021-11-18` <- NULL
-# contiene_16Dic <- c(4,7,13,20,24,25)
-# newvessel$`2`$`2022-02-08` <- NULL
 # 
-# newvessel$`2`$`2021-05-13`$N_vessel  <- ifelse(newvessel$`2`$`2021-05-13`$N_vessel  %in% contiene_13My, newvessel$`2`$`2021-05-13`$N_vessel , NA)
-# newvessel$`2`$`2021-07-22`$N_vessel  <- ifelse(newvessel$`2`$`2021-07-22`$N_vessel  %in% contiene_22Jul, newvessel$`2`$`2021-07-22`$N_vessel , NA)
-# newvessel$`2`$`2021-09-09`$N_vessel  <- ifelse(newvessel$`2`$`2021-09-09`$N_vessel  %in% contiene_9sep, newvessel$`2`$`2021-09-09`$N_vessel , NA)
-# newvessel$`2`$`2021-10-14`$N_vessel  <- ifelse(newvessel$`2`$`2021-10-14`$N_vessel  %in% contiene_14Oct, newvessel$`2`$`2021-10-14`$N_vessel , NA)
-# newvessel$`2`$`2021-12-16`$N_vessel  <- ifelse(newvessel$`2`$`2021-12-16`$N_vessel  %in% contiene_16Dic, newvessel$`2`$`2021-12-16`$N_vessel , NA)
-
-####me he quedado aqui
-
-
-
-
-
-
-
-
+# # saveRDS(vessel_imageJ, file = "vessel_Data.rds")
 ```
 
 ```{r Modificacion Txemi, include=FALSE}
 
-area_porvaso <- lapply(date_vess, function(x){
-  lapply(x, function(z){z$area_Feret <- 0.785*(z$Feret^2)
-  return(z)})
-  
-})
+new_vess$newvess$Area_microm <- 0.785*(new_vess$newvess$Feret_microm^2)
+vessel <- new_vess$newvess
 
-names(area_porvaso) <- ifelse(names(area_porvaso) =="g22J21", "g22Jul21", names(area_porvaso))
-names(area_porvaso) <- ifelse(names(area_porvaso) =="DD15A21", "D15A21", names(area_porvaso))
-names(area_porvaso) <- ifelse(names(area_porvaso) =="e29Abr21", "e29A21", names(area_porvaso))
-names(area_porvaso) <- ifelse(names(area_porvaso) =="f10J211", "f10J21", names(area_porvaso))
+vessel$treatment <- ifelse(vessel$indv %in% control, "control", "drought")
 
 
-meses <- c(
-  A = 4 , J = 6, Jul = 7, S = 9,
-  O = 10, Nov = 11, Dic = 12, En = 1, Feb = 2)
-
-extraer_fecha <- function(codigo) {
-  
-  # Extraer día
-  dia <- as.numeric(str_extract(codigo, "\\d+"))
-  
-  # Extraer la parte de mes y año (lo que queda después del día)
-  resto <- str_extract(codigo, "[A-Za-z]+\\d+$")
-  
-  # Separar mes y año
-  mes_str <- str_extract(resto, "[A-Za-z]+")
-  ano_str <- str_extract(resto, "\\d+")
-  
-  # Buscar el mes en el vector meses
-  mes_num <- meses[mes_str]
-  
-  # Año (por si acaso tiene 2 o más dígitos)
-  
-  # Crear fecha
-  date_char <- paste(paste("20",ano_str, sep = "") ,mes_num, dia, sep = "/")
-  return(date_char)
-} ###extraigo la fecha por el nombre
-
-fechas <- as.character(names(area_porvaso))
-fechas <- sapply(fechas, extraer_fecha)
-fechas <-  as.Date.character(fechas)
-
-x <- 0 
-while(x < length(area_porvaso)){
-  x <- x +1
-  date <- fechas[x]
-  y <- 0
-  while(y < length(area_porvaso[[x]])){
-    y <- y+1
-    area_porvaso[[x]][[y]]$fecha <- date
-  }
-  rm(y)
-} ##le añado la fecha
-rm(x)
-
-##añadimos el individuo
-extraer_individuo <- function(nombre) {
-  num <- regmatches(nombre, regexpr("[0-9]+", nombre))  # Busca el primer número
-  as.numeric(num)}
-
-area_porvaso <- lapply(area_porvaso, function(df){
-  nombres <- names(df)
-  individuos <- sapply(nombres, extraer_individuo)
-  z <- 0
-  while(z < length(df)){
-    z <- z+1
-    df[[z]]$indv <- individuos[z]
-  }
-  df <- lapply(df, function(y){
-  y <- data_frame("area_Feret "= y$area_Feret, "fecha" = y$fecha, "indv" = y$indv)
-  return(y)
-  })
-  return(df)
-}) ##creo el data frame con el indiviuo y las variables que necesito
-
-###voy a aliminar las ventanas temporales de mas de 1 mes
-area_porvaso$i14O21$m40QcC14O21.csv <- NULL
-area_porvaso$i14O21$i18QcS14O21.csv <- NULL
-area_porvaso$i14O21$h10QcC14O21.csv <- NULL
-area_porvaso$k16Dic21$`8QcC16D21.csv` <- NULL
-area_porvaso$l19En22$n44QcC19E22.csv <- NULL
-area_porvaso$i14O21$o52QcS14O21.csv <- NULL
-
-
-area_porvaso_unido <- do.call(rbind, Map(data.frame, lapply(area_porvaso, function(x){ do.call(rbind, Map(data.frame, x))})))
-
-control <- c(2,3,5,8,9,10,36,40,44)
-area_porvaso_unido$treatment <- ifelse(area_porvaso_unido$indv %in% control, "control", "drought")
-
-area_porvaso_unido$area_Feret. <-  ifelse(area_porvaso_unido$fecha == as.Date("2021-04-29
-") & area_porvaso_unido$indv == 40, NA, area_porvaso_unido$area_Feret. )
-
-area_porvaso_unido$area_Feret. <-  ifelse(area_porvaso_unido$fecha == as.Date("2021-11-18") & area_porvaso_unido$area_Feret. >0.01 , NA, area_porvaso_unido$area_Feret. ) ##vasos de la fecha anterior
-
-
-Total_areavessel <- ggplot(area_porvaso_unido, aes(x= as.factor(fecha), y= area_Feret., fill= as.factor(treatment)))+
+ ggplot(vessel, aes(x= as.factor(date), y= Area_microm, fill= as.factor(treatment)))+
            geom_boxplot()+
   theme_classic()+
-  ylab("area por vaso (mm^2)")+
+  ylab("area por vaso (micromm^2)")+
   scale_fill_manual(values = c("#97FFFF","#FF6A6A"))
 
 
-area_porvaso_unido_sinEW <- area_porvaso_unido
-area_porvaso_unido_sinEW$fecha <- ifelse(area_porvaso_unido_sinEW$fecha == as.Date("2021-04-01") | area_porvaso_unido_sinEW$fecha == as.Date("2021-04-15") | area_porvaso_unido_sinEW$fecha == as.Date("2021-04-29"), NA, area_porvaso_unido_sinEW$fecha )
+area_porvaso_unido_sinEW <- vessel
+area_porvaso_unido_sinEW$treatment <- ifelse(area_porvaso_unido_sinEW$date == as.Date("2021-04-01") | area_porvaso_unido_sinEW$date == as.Date("2021-04-15") | area_porvaso_unido_sinEW$date == as.Date("2021-04-29") | area_porvaso_unido_sinEW$date == as.Date("2021-05-13") , NA, area_porvaso_unido_sinEW$treatment )
 
 area_porvaso_unido_sinEW <- area_porvaso_unido_sinEW[complete.cases(area_porvaso_unido_sinEW), ]
 
-LW_areavessel <- ggplot(area_porvaso_unido_sinEW, aes(x= as.factor(fecha), y= area_Feret., fill= as.factor(treatment)))+
+ggplot(area_porvaso_unido_sinEW, aes(x= as.factor(date), y= Area_microm, fill= as.factor(treatment)))+
            geom_boxplot(show.legend = F)+
   theme(panel.background = element_rect(fill = "white"),
           axis.line.x = element_line(colour="black"),
@@ -1348,15 +1209,14 @@ LW_areavessel <- ggplot(area_porvaso_unido_sinEW, aes(x= as.factor(fecha), y= ar
         axis.ticks.length  = unit(0.1, "cm"))+
   ylab(" ")+
   scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
-  scale_y_continuous(limits = c(0,0.02))+
   xlab("date")
 
 
-area_porvaso_unido_EW <- area_porvaso_unido
-area_porvaso_unido_EW$fecha <- ifelse(area_porvaso_unido_EW$fecha == as.Date("2021-04-01") | area_porvaso_unido_EW$fecha == as.Date("2021-04-15") | area_porvaso_unido_EW$fecha == as.Date("2021-04-29"), area_porvaso_unido_EW$fecha,  NA )
+area_porvaso_unido_EW <- vessel
+area_porvaso_unido_EW$treatment <- ifelse(area_porvaso_unido_EW$date == as.Date("2021-04-01") | area_porvaso_unido_EW$date == as.Date("2021-04-15") | area_porvaso_unido_EW$date == as.Date("2021-04-29") | area_porvaso_unido_EW$date == as.Date("2021-05-13") , area_porvaso_unido_EW$treatment,  NA )
 area_porvaso_unido_EW <- area_porvaso_unido_EW[complete.cases(area_porvaso_unido_EW), ]
 
-EW_areavessel <- ggplot(area_porvaso_unido_EW, aes(x= as.factor(fecha), y= area_Feret., fill= as.factor(treatment)))+
+ggplot(area_porvaso_unido_EW, aes(x= as.factor(date), y= Area_microm, fill= as.factor(treatment)))+
            geom_boxplot(show.legend = F)+
   theme(panel.background = element_rect(fill = "white"),
           axis.line.x = element_line(colour="black"),
