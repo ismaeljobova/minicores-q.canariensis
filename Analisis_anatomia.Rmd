@@ -249,7 +249,7 @@ predict_Humedad <- get_predictions(modelo_humedad$gam,
 predict_Humedad <- unique(predict_Humedad)
 
 clima_plot$Hum <-  ggplot()+
-  geom_point(data = Hum_suelo, aes(x= as.Date(Hum_suelo$date1), y= as.numeric(values), colour= Treatment), alpha= 0.1)+
+  geom_point(data = Hum_suelo, aes(x= as.Date(Hum_suelo$date1), y= as.numeric(values), colour= Treatment), alpha= 0.1, show.legend = F)+
   geom_line(data= predict_Humedad, aes(x= as.Date(date1), y= fit, colour = Treatment), lwd=0.9, show.legend = F)+
   facet_grid(. ~ Depth)+
   theme(panel.background = element_rect(fill = "white"),
@@ -257,7 +257,8 @@ clima_plot$Hum <-  ggplot()+
           axis.line.y = element_line(colour="black"))+
   scale_color_manual(values=c("#0000FF",'#CD3333'))+
   geom_ribbon(data= predict_Humedad, alpha=.3, mapping = aes(x=as.Date(date1), ymin= fit-CI, ymax= fit +CI, fill=Treatment),colour= NA, show.legend = F)+
-  scale_fill_manual(values=c("#00EEEE",'#FF4040'))
+  scale_fill_manual(values=c("#00EEEE",'#FF4040')) +
+  labs( x= " ", y = "soil moisture (%)")
 
 
 ###SPEI
@@ -302,13 +303,13 @@ clima_plot$prp <- ggplot()+
   scale_x_date(date_breaks = "1 month" ,date_labels = " ")+
   scale_y_continuous(sec.axis = sec_axis(~(./10),name="VPD (Kpa)",breaks= c(1,2,3,4)),
                      name = "precipitation (mm)",breaks = c(0,10,20,30,40), expand = c(0,0))+
-  xlab(" ") 
+  scale_x_date(date_breaks = "1 month" ,date_labels = "%m")
 
 ##Plots
 
 
-plot_grid(clima_plot$temp,clima_plot$prp,clima_plot$SPEI, ncol = 1)
-
+plot_grid(clima_plot$temp,clima_plot$prp, clima_plot$Hum, ncol = 1)
+clima_plot$SPEI
 
 ```
 
@@ -409,17 +410,20 @@ predict_Ci <- predictInterval(modelo5,
 df$fit <- predict_Ci$fit
 df$upr <- predict_Ci$upr
 df$lwr <- predict_Ci$lwr
-ggplot(data = df, aes(x = date_1, y=fit, colour = Tratam ))+
-  geom_line()+
-  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = Tratam), alpha = 0.2, color = NA)+
-  scale_color_manual(values= c("blue", "red"))+
-  scale_fill_manual(values= c("blue", "red"))+
-  scale_x_continuous(limits = c(30,150), breaks = seq(from=40, to=160, by=20))
+plot_EWformation <- ggplot(data = df, aes(x = date_1, y=fit, colour = Tratam ))+
+  geom_line(show.legend = F, lwd= 0.7)+
+  geom_ribbon(data= df, alpha=.3, mapping = aes(x=as.Date(date_1), ymin= lwr, ymax= upr, fill=Tratam),colour= NA, show.legend = F)+
+  scale_x_continuous(limits = c(30,150), breaks = seq(from=40, to=160, by=20))+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text=element_text(size=12, colour = "black"),
+        axis.title=element_text(size=14))+
+  scale_color_manual(values=c("#0000FF",'#CD3333'))+
+  scale_fill_manual(values=c("#00EEEE",'#FF4040')) +
+  labs( x= "DOY", y = "EW vessel formation probability")+
+  scale_y_continuous(expand = c(0,0),limits = c(0,1.03))
 
-
-# Día donde prob supera 0.5 = inicio estimado de EW
-# inicio_est <- newdat$date_1[which.min(abs(newdat$prob_EW - 0.5))]
-# inicio_est
 
 
 ```
@@ -463,13 +467,26 @@ predict_Ci <- predictInterval(modelo5,
 df$fit <- predict_Ci$fit
 df$upr <- predict_Ci$upr
 df$lwr <- predict_Ci$lwr
-ggplot(data = df, aes(x = date_1, y=fit, colour = Tratam ))+
-  geom_line()+
-  geom_ribbon(aes(ymin = lwr, ymax = upr, fill = Tratam), alpha = 0.2, color = NA)+
-  scale_color_manual(values= c("blue", "red"))+
-  scale_fill_manual(values= c("blue", "red"))
+plot_LWformation <-ggplot(data = df, aes(x = date_1, y=fit, colour = Tratam ))+
+  geom_line(show.legend = F, lwd= 0.7)+
+  geom_ribbon(data= df, alpha=.3, mapping = aes(x=as.Date(date_1), ymin= lwr, ymax= upr, fill=Tratam),colour= NA, show.legend = F)+
+  scale_x_continuous(limits = c(100,250), breaks = seq(from=40, to=250, by=20))+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text=element_text(size=12, colour = "black"),
+        axis.title=element_text(size=14))+
+  scale_color_manual(values=c("#0000FF",'#CD3333'))+
+  scale_fill_manual(values=c("#00EEEE",'#FF4040')) +
+  labs( x= "DOY", y = "LW vessel formation probability")+
+  scale_y_continuous(expand = c(0,0), limits = c(0,1.03))
+plot_LWformation
+# Día donde prob supera 0.5 = inicio estimado de EW
+df$date_1 <- as.Date(df$date_1)
+df$date_1[which.min(abs(df$fit -0.5))]
 
 
+plot_grid(plot_EWformation,plot_LWformation, ncol = 2)
 rm(modelo5, Qca_phenology_LW)
 ```
 
@@ -977,25 +994,35 @@ modelo_diference_TRWstandard <-  ggplot()+
   geom_point(data = TRW_2021, aes(x= as.Date(date_1), y= log(diference_TRWstandard + 1), colour = treatment))+
   geom_line(data = newdata, aes(x= as.Date(date_1), y=predict, colour = treatment))+
   geom_ribbon(data = newdata, alpha=.4,mapping = aes(x=as.Date(date_1), ymin=predict-CI, ymax=predict+CI, fill=treatment))+
-    scale_color_manual(values = c("#1E90FF","#FF4040"))+
-  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
   theme(panel.background = element_rect(fill = "white"),
           axis.line.x = element_line(colour="black"),
           axis.line.y = element_line(colour="black"),
-        axis.text = element_text(color = "black",size = 12),
-        axis.ticks.length  = unit(0.1, "cm"))+
-  geom_hline(yintercept= 0)
+        axis.text=element_text(size=12, colour = "black"),
+        axis.title=element_text(size=14))+
+    scale_y_continuous(expand = c(0,0), limits = c(-0.05,0.57))+
+  scale_color_manual(values=c("#0000FF",'#CD3333'))+
+  scale_fill_manual(values=c("#00EEEE",'#FF4040')) +
+  labs( x= "month", y = "Proportion of annual tree-ring formation")+
+  scale_x_date(date_breaks = "1 month" ,date_labels = "%m")
+
 modelo_diference_TRWstandard
+
+
+
+
 modelo_diference_TRWstandard_1 <-  ggplot()+
   geom_line(data = newdata, aes(x= as.Date(date_1), y=predict, colour = treatment))+
   geom_ribbon(data = newdata, alpha=.4,mapping = aes(x=as.Date(date_1), ymin=predict-CI, ymax=predict+CI, fill=treatment))+
-    scale_color_manual(values = c("#1E90FF","#FF4040"))+
-  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
-  theme(panel.background = element_rect(fill = "white"),
+  scale_color_manual(values=c("#0000FF",'#CD3333'))+
+  scale_fill_manual(values=c("#00EEEE",'#FF4040')) +
+   theme(panel.background = element_rect(fill = "white"),
           axis.line.x = element_line(colour="black"),
           axis.line.y = element_line(colour="black"),
-        axis.text = element_text(color = "black",size = 12),
-        axis.ticks.length  = unit(0.1, "cm"))
+        axis.text=element_text(size=12, colour = "black"),
+        axis.title=element_text(size=14))+
+    scale_y_continuous(expand = c(0,0), limits = c(-0.02,0.2))+
+  labs( x= "month", y = "Proportion of annual tree-ring formation")+
+  scale_x_date(date_breaks = "1 month" ,date_labels = "%m")
 
 
 modelo_diference_TRWstandard
@@ -1046,31 +1073,41 @@ newdata$CI <- model_growth$se.fit
 modelo_TRWstandard <- ggplot()+
   geom_point(data = TRW_2021, aes(x= as.Date(date_1), y= TRWstandard, colour = treatment))+
   geom_line(data = newdata, aes(x= as.Date(date_1), y=predict, colour = treatment))+
-  geom_ribbon(data = newdata, alpha=.4,mapping = aes(x=as.Date(date_1), ymin=predict-CI, ymax=predict+CI, fill=treatment))+
-    scale_color_manual(values = c("#1E90FF","#FF4040"))+
-  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
-  theme(panel.background = element_rect(fill = "white"),
+  geom_ribbon(data = newdata, alpha=.4,mapping = aes(x=as.Date(date_1), ymin=predict-CI, ymax=predict+CI, fill=treatment))+ scale_color_manual(values=c("#0000FF",'#CD3333'))+
+  scale_fill_manual(values=c("#00EEEE",'#FF4040')) +
+   theme(panel.background = element_rect(fill = "white"),
           axis.line.x = element_line(colour="black"),
           axis.line.y = element_line(colour="black"),
-        axis.text = element_text(color = "black",size = 12),
-        axis.ticks.length  = unit(0.1, "cm"))
+        axis.text=element_text(size=12, colour = "black"),
+        axis.title=element_text(size=14))+
+    scale_y_continuous(expand = c(0,0), limits = c(-0.1,1.1))+
+  labs( x= "month", y = "Intra-annual progress of tree-ring formation")+
+  scale_x_date(date_breaks = "1 month" ,date_labels = "%m")
 
 modelo_TRWstandard_1 <- ggplot()+
    geom_line(data = newdata_indv , aes(x= as.Date(date_1), y= as.numeric(predict), colour = treatment,
                                        group = interaction(as.factor(indv), treatment)), alpha = 0.4, lwd= 0.7)+
-  geom_line(data = newdata, aes(x= as.Date(date_1), y=predict, colour = treatment), lwd= 1.5)+
-    scale_color_manual(values = c("#1E90FF","#FF4040"))+
-  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
-  theme(panel.background = element_rect(fill = "white"),
+  geom_line(data = newdata, aes(x= as.Date(date_1), y=predict, colour = treatment), lwd= 1.5)+ 
+  scale_color_manual(values=c("#0000FF",'#CD3333'))+
+  scale_fill_manual(values=c("#00EEEE",'#FF4040')) +
+   theme(panel.background = element_rect(fill = "white"),
           axis.line.x = element_line(colour="black"),
           axis.line.y = element_line(colour="black"),
-        axis.text = element_text(color = "black",size = 12),
-        axis.ticks.length  = unit(0.1, "cm"))
-  
+        axis.text=element_text(size=12, colour = "black"),
+        axis.title=element_text(size=14))+
+    scale_y_continuous(expand = c(0,0), limits = c(-0.1,1.1))+
+  labs( x= "month", y = "Intra-annual progress of tree-ring formation")+
+  scale_x_date(date_breaks = "1 month" ,date_labels = "%m")
+
+
+
+
+plot_grid(modelo_TRWstandard,modelo_TRWstandard_1,modelo_diference_TRWstandard,modelo_diference_TRWstandard_1, ncol = 2)
 modelo_TRWstandard_1
 modelo_TRWstandard
 modelo_diference_TRWstandard
-
+modelo_diference_TRWstandard
+modelo_diference_TRWstandard_1
 ###test de bimodalidad (no lo parece) ###hay pico de crecimiento en control pero no en sequia
 
 
@@ -1180,145 +1217,122 @@ rm(der_control, der_sequia, modelo1, modelo2, modelo3, modelo4, modelo_crecimien
 # # saveRDS(vessel_imageJ, file = "vessel_Data.rds")
 ```
 
-```{r Modificacion Txemi, include=FALSE}
+```{r Nuevos vasos por fecha, include=FALSE}
 
 new_vess$newvess$Area_microm <- 0.785*(new_vess$newvess$Feret_microm^2)
 vessel <- new_vess$newvess
 
+
+#  ggplot(vessel, aes(x= as.factor(date), y= Area_microm, fill= as.factor(treatment)))+
+#            geom_boxplot()+
+#   theme_classic()+
+#   ylab("area por vaso (micromm^2)")+
+#   scale_fill_manual(values = c("#97FFFF","#FF6A6A"))
+# 
+# 
+# area_porvaso_unido_sinEW <- vessel
+# area_porvaso_unido_sinEW$treatment <- ifelse(area_porvaso_unido_sinEW$date == as.Date("2021-04-01") | area_porvaso_unido_sinEW$date == as.Date("2021-04-15") | area_porvaso_unido_sinEW$date == as.Date("2021-04-29") | area_porvaso_unido_sinEW$date == as.Date("2021-05-13") , NA, area_porvaso_unido_sinEW$treatment )
+# 
+# area_porvaso_unido_sinEW <- area_porvaso_unido_sinEW[complete.cases(area_porvaso_unido_sinEW), ]
+# 
+# ggplot(area_porvaso_unido_sinEW, aes(x= as.factor(date), y= Area_microm, fill= as.factor(treatment)))+
+#            geom_boxplot(show.legend = F)+
+#   theme(panel.background = element_rect(fill = "white"),
+#           axis.line.x = element_line(colour="black"),
+#           axis.line.y = element_line(colour="black"),
+#         axis.text = element_text(color = "black",size = 12),
+#         axis.ticks.length  = unit(0.1, "cm"))+
+#   ylab(" ")+
+#   scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
+#   xlab("date")
+# 
+# 
+# area_porvaso_unido_EW <- vessel
+# area_porvaso_unido_EW$treatment <- ifelse(area_porvaso_unido_EW$date == as.Date("2021-04-01") | area_porvaso_unido_EW$date == as.Date("2021-04-15") | area_porvaso_unido_EW$date == as.Date("2021-04-29") | area_porvaso_unido_EW$date == as.Date("2021-05-13") , area_porvaso_unido_EW$treatment,  NA )
+# area_porvaso_unido_EW <- area_porvaso_unido_EW[complete.cases(area_porvaso_unido_EW), ]
+# 
+# ggplot(area_porvaso_unido_EW, aes(x= as.factor(date), y= Area_microm, fill= as.factor(treatment)))+
+#            geom_boxplot(show.legend = F)+
+#   theme(panel.background = element_rect(fill = "white"),
+#           axis.line.x = element_line(colour="black"),
+#           axis.line.y = element_line(colour="black"),
+#         axis.text = element_text(color = "black",size = 12),
+#         axis.ticks.length  = unit(0.1, "cm"))+
+#   ylab(" ")+
+#   scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
+#   scale_y_continuous()+
+#   xlab("date")
+# 
+# 
+# ggplot(area_porvaso_unido, aes(x= fecha, y= area_Feret., color = treatment))+
+#            geom_point()+
+#   geom_smooth()+
+#   theme_classic()+
+#   ylab("area por vaso (mm^2)")+
+#   scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
+#   scale_color_manual(values = c("#1E90FF","#FF4040"))
+
+####parametros hidraulicos
+  vessel$D5 <- vessel$Feret_microm^5
+  vessel$D4 <- vessel$Feret_microm^4
+  vessel$D4_metros <- vessel$Feret_microm/(10^24)
+  vessel <- split(vessel, vessel$date) #########separo por fecha e individuo
+  vessel <- lapply(vessel, function(n){n <- split(n, n$indv)})
+
+vessel <- lapply(vessel, function(y){
+    y <- lapply(y, function(z){
+      z <- data.frame("indv" = unique(z$indv), "N_vessels" = length(z$N_vessel), "totalvesselarea"= sum(z$Area_microm), "sumD4"= sum(z$D4), "sumD5"= sum(z$D5), "sumD4_metros"= sum(z$D4_metros), "date"= unique(z$date), "Dmin_microm" = min(z$Feret_microm), "Dmean_microm" = mean(z$Feret_microm) )})
+    return(y)
+  }) ######calculo D4 y su suma en todos los casos que tengo de muestreo
+
+###uno el area y calculo los difernetes parametros
+
+
+vessel <- lapply(vessel, function(x){
+  x <- lapply(x, function(y){
+      y <- merge(y, new_vess$newarea, by= c("indv", "date"))
+      y$new_Areamm <- y$new_Areamicromcuad/1000000
+      
+
+      y <- data.frame("indv" = y$indv, "date" = y$date,"N_vessels"= y$N_vessels ,"totalvesselarea"= y$totalvesselarea, "meanvesselarea"= y$totalvesselarea/ y$N_vessels, "vesselfrequency"= y$N_vessels/(y$new_Areamm), "dh"= y$sumD5/y$sumD4, "Kh"= (((3.14*998.2071)/(128*0.001002))*y$sumD4_metros), "Totalnewareamm"= y$new_Areamm, "vulindex" = y$Dmean_microm/y$N_vessels)
+      
+      y$Ks <- y$Kh/y$Totalnewareamm
+
+    return(y)
+  })
+  x <- do.call(rbind, Map(data.frame, x ))
+  return(x)
+}) ######calculo del dh, kh, ks, vessel frequency y meanvesselarea
+
+vessel <- do.call(rbind, Map(data.frame, vessel))
+
 vessel$treatment <- ifelse(vessel$indv %in% control, "control", "drought")
 
 
- ggplot(vessel, aes(x= as.factor(date), y= Area_microm, fill= as.factor(treatment)))+
-           geom_boxplot()+
-  theme_classic()+
-  ylab("area por vaso (micromm^2)")+
-  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))
 
-
-area_porvaso_unido_sinEW <- vessel
-area_porvaso_unido_sinEW$treatment <- ifelse(area_porvaso_unido_sinEW$date == as.Date("2021-04-01") | area_porvaso_unido_sinEW$date == as.Date("2021-04-15") | area_porvaso_unido_sinEW$date == as.Date("2021-04-29") | area_porvaso_unido_sinEW$date == as.Date("2021-05-13") , NA, area_porvaso_unido_sinEW$treatment )
-
-area_porvaso_unido_sinEW <- area_porvaso_unido_sinEW[complete.cases(area_porvaso_unido_sinEW), ]
-
-ggplot(area_porvaso_unido_sinEW, aes(x= as.factor(date), y= Area_microm, fill= as.factor(treatment)))+
-           geom_boxplot(show.legend = F)+
-  theme(panel.background = element_rect(fill = "white"),
-          axis.line.x = element_line(colour="black"),
-          axis.line.y = element_line(colour="black"),
-        axis.text = element_text(color = "black",size = 12),
-        axis.ticks.length  = unit(0.1, "cm"))+
-  ylab(" ")+
-  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
-  xlab("date")
-
-
-area_porvaso_unido_EW <- vessel
-area_porvaso_unido_EW$treatment <- ifelse(area_porvaso_unido_EW$date == as.Date("2021-04-01") | area_porvaso_unido_EW$date == as.Date("2021-04-15") | area_porvaso_unido_EW$date == as.Date("2021-04-29") | area_porvaso_unido_EW$date == as.Date("2021-05-13") , area_porvaso_unido_EW$treatment,  NA )
-area_porvaso_unido_EW <- area_porvaso_unido_EW[complete.cases(area_porvaso_unido_EW), ]
-
-ggplot(area_porvaso_unido_EW, aes(x= as.factor(date), y= Area_microm, fill= as.factor(treatment)))+
-           geom_boxplot(show.legend = F)+
-  theme(panel.background = element_rect(fill = "white"),
-          axis.line.x = element_line(colour="black"),
-          axis.line.y = element_line(colour="black"),
-        axis.text = element_text(color = "black",size = 12),
-        axis.ticks.length  = unit(0.1, "cm"))+
-  ylab(" ")+
-  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
-  scale_y_continuous()+
-  xlab("date")
-
-
-ggplot(area_porvaso_unido, aes(x= fecha, y= area_Feret., color = treatment))+
+ggplot(vessel , aes(x= as.factor(date), y= totalvesselarea, color = treatment))+
            geom_point()+
   geom_smooth()+
   theme_classic()+
-  ylab("area por vaso (mm^2)")+
+  ylab("area por vaso (microm^2)")+
   scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
   scale_color_manual(values = c("#1E90FF","#FF4040"))
 
 
-
-area_porvaso_unido$area_Feret_mod <- log(area_porvaso_unido$area_Feret.)
-area_porvaso_unido$date1 <- as.numeric(area_porvaso_unido$fecha)
-##########por aqui
-
-area_porvaso_unido_DBH <- merge(area_porvaso_unido, DBH_H, by= c("indv","indv"))
-
-area_porvaso_unido_DBH$DBH_cm  <- area_porvaso_unido_DBH$`DBH_(cm)` 
-area_porvaso_unido_DBH$Diametro_copa_cm <- area_porvaso_unido_DBH$`Diametro_copa_(cm)`
-
-trend_areaves1 <- gamm4(data =area_porvaso_unido_DBH, area_Feret. ~ s(date1) + treatment , random=~(1|indv))
-trend_areaves2 <- gamm4(data =area_porvaso_unido_DBH, area_Feret. ~ s(date1) + s(DBH_cm) , random=~(1|indv))
-trend_areaves3 <- gamm4(data =area_porvaso_unido_DBH, area_Feret. ~ s(date1) +   s(Diametro_copa_cm) , random=~(1|indv))
-trend_areaves4 <- gamm4(data =area_porvaso_unido_DBH, area_Feret. ~ s(date1) + s(DBH_cm) + treatment , random=~(1|indv))
-trend_areaves4 <- gamm4(data =area_porvaso_unido_DBH, area_Feret. ~ s(date1) + s(Diametro_copa_cm) + treatment , random=~(1|indv))
-trend_areaves5 <- gamm4(data =area_porvaso_unido_DBH, area_Feret. ~ s(date1) + s(DBH_cm) +  s(Diametro_copa_cm) + treatment , random=~(1|indv))
-trend_areaves6 <- gamm4(data =area_porvaso_unido_DBH, area_Feret. ~ s(date1) + s(DBH_cm) +  s(Diametro_copa_cm), random=~(1|indv))
-trend_areaves7 <- gamm4(data =area_porvaso_unido_DBH, area_Feret. ~ s(date1) + s(DBH_cm) +  s(Diametro_copa_cm) + treatment , random=~(1|indv))
-
-model.sel(trend_areaves1$mer, trend_areaves2$mer,trend_areaves3$mer, trend_areaves4$mer, trend_areaves5$mer, trend_areaves6$mer, trend_areaves7$mer) ###el mas significativo seria el 2
-
-summary(trend_areaves1$gam)
-summary(trend_areaves2$gam)
-summary(trend_areaves3$gam)
-summary(trend_areaves4$gam)
-summary(trend_areaves5$gam)
-summary(trend_areaves6$gam)
-summary(trend_areaves7$gam)
-sum(summary(trend_areaves1$gam)$s.table[, "edf"])
-sum(summary(trend_areaves2$gam)$s.table[, "edf"])
-sum(summary(trend_areaves3$gam)$s.table[, "edf"])
-sum(summary(trend_areaves4$gam)$s.table[, "edf"])
-sum(summary(trend_areaves5$gam)$s.table[, "edf"])
-sum(summary(trend_areaves6$gam)$s.table[, "edf"])
-sum(summary(trend_areaves7$gam)$s.table[, "edf"])
-
-summary(trend_areaves$gam)
-qqnorm(trend_areaves$gam$residuals)
-qqline(trend_areaves$gam$residuals)
-
-
-
-pred1 <- get_predictions(trend_areaves$gam, 
-                       cond = list(date1 = seq(min(area_porvaso_unido$date1, na.rm=T),
-                                            max(area_porvaso_unido$date1, na.rm=T), 
-                                            length.out = nrow(area_porvaso_unido )),
-                                  treatment = c("control", "drought"),
-                                  se=T))
-
-pred1$date <- as.Date(pred1$date1)
-
-###calculo la tendencia pero en el acumulado
-
-
-tendencia_area_vess <- ggplot(data=pred1)+
-  geom_line(mapping = aes(x=date, y=fit, color= treatment), show.legend = F)+
-  geom_ribbon(alpha=.4,mapping = aes(x=date, ymin=fit-CI, ymax=fit+CI, fill=treatment), show.legend = F) +
-  geom_point(data = area_porvaso_unido, mapping =  aes(x=fecha, y=as.numeric(area_Feret.), fill =treatment), show.legend = F, shape = 21, size = 1.7, color = "black", stroke = 1)+
-  scale_color_manual(values = c("#97FFFF","#FF6A6A"))+
+ggplot(vessel , aes(x= as.factor(date), y= vesselfrequency, color = treatment))+
+           geom_boxplot()+
+  theme_classic()+
+  ylab("vessel frequency")+
   scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
-  theme(panel.background = element_rect(fill = "white"),
-          axis.line.x = element_line(colour="black"),
-          axis.line.y = element_line(colour="black"),
-        axis.text = element_text(color = "black",size = 12),
-        axis.ticks.length  = unit(0.1, "cm"))+
-  xlab("month")+
-  ylab("area por vaso (mm^2)")
-######me queda plotearlo y enviarlo
+  scale_color_manual(values = c("#1E90FF","#FF4040"))
 
 
-fila_inferior <- plot_grid(EW_areavessel, LW_areavessel, ncol = 2, rel_widths = c(1, 3))
-
-combinado <- plot_grid(tendencia_area_vess, fila_inferior, ncol = 1, rel_heights = c(1, 1))
-
-
-combinado
-
-####ver si hay direncia entre tratamientos
-area_anova <- split(area_porvaso_unido, area_porvaso_unido$fecha)
-lapply(area_anova, function(x){summary(aov(data=x, area_Feret. ~ treatment))})
-
+ggplot(vessel , aes(x= as.factor(date), y= Kh, color = treatment))+
+           geom_boxplot()+
+  theme_classic()+
+  ylab("ks")+
+  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
+  scale_color_manual(values = c("#1E90FF","#FF4040"))
 
 
 ```
