@@ -991,7 +991,7 @@ newdata$predict <- model_growth$fit
 newdata$CI <- model_growth$se.fit
 
 modelo_diference_TRWstandard <-  ggplot()+
-  geom_point(data = TRW_2021, aes(x= as.Date(date_1), y= log(diference_TRWstandard + 1), colour = treatment))+
+  geom_point(data = TRW_2021, aes(x= as.Date(date_1), y= log(diference_TRWstandard + 1), colour = treatment),alpha= 0.1, show.legend = F)+
   geom_line(data = newdata, aes(x= as.Date(date_1), y=predict, colour = treatment))+
   geom_ribbon(data = newdata, alpha=.4,mapping = aes(x=as.Date(date_1), ymin=predict-CI, ymax=predict+CI, fill=treatment))+
   theme(panel.background = element_rect(fill = "white"),
@@ -1071,7 +1071,7 @@ newdata$predict <- model_growth$fit
 newdata$CI <- model_growth$se.fit
 
 modelo_TRWstandard <- ggplot()+
-  geom_point(data = TRW_2021, aes(x= as.Date(date_1), y= TRWstandard, colour = treatment))+
+  geom_point(data = TRW_2021, aes(x= as.Date(date_1), y= TRWstandard, colour = treatment),alpha= 0.1, show.legend = F)+
   geom_line(data = newdata, aes(x= as.Date(date_1), y=predict, colour = treatment))+
   geom_ribbon(data = newdata, alpha=.4,mapping = aes(x=as.Date(date_1), ymin=predict-CI, ymax=predict+CI, fill=treatment))+ scale_color_manual(values=c("#0000FF",'#CD3333'))+
   scale_fill_manual(values=c("#00EEEE",'#FF4040')) +
@@ -1102,12 +1102,7 @@ modelo_TRWstandard_1 <- ggplot()+
 
 
 
-plot_grid(modelo_TRWstandard,modelo_TRWstandard_1,modelo_diference_TRWstandard,modelo_diference_TRWstandard_1, ncol = 2)
-modelo_TRWstandard_1
-modelo_TRWstandard
-modelo_diference_TRWstandard
-modelo_diference_TRWstandard
-modelo_diference_TRWstandard_1
+plot_grid(modelo_TRWstandard,modelo_diference_TRWstandard,modelo_TRWstandard_1, modelo_diference_TRWstandard_1, ncol = 2)
 ###test de bimodalidad (no lo parece) ###hay pico de crecimiento en control pero no en sequia
 
 
@@ -1218,61 +1213,66 @@ rm(der_control, der_sequia, modelo1, modelo2, modelo3, modelo4, modelo_crecimien
 ```
 
 ```{r Nuevos vasos por fecha, include=FALSE}
+###PREGUNTA: ¿ LOS VASOS VARÍAN ENTRE TRATAMIENTO EN LAS FECHAS? // ¿HAY DIFERENCIAS HIDRAULICAS Y DENSIDAD DE VASOS A LO LARGO DEL TIEMPO?
 
 new_vess$newvess$Area_microm <- 0.785*(new_vess$newvess$Feret_microm^2)
 vessel <- new_vess$newvess
-
-
-#  ggplot(vessel, aes(x= as.factor(date), y= Area_microm, fill= as.factor(treatment)))+
-#            geom_boxplot()+
+# 
+# vessel_1 <- vessel
+# vessel_1$treatment <- ifelse(vessel$indv %in% control, "control", "drought")
+# 
+#  ggplot(vessel_1, aes(x= as.factor(date), y= log(Area_microm), fill= as.factor(treatment)))+
+#            geom_boxplot(show.legend = F)+
 #   theme_classic()+
 #   ylab("area por vaso (micromm^2)")+
-#   scale_fill_manual(values = c("#97FFFF","#FF6A6A"))
+#   scale_fill_manual(values=c("#00EEEE",'#FF4040')) 
+# 
+# #ELIMINO EL VALOR ANOMALO
+# vessel_1$treatment <- ifelse(vessel_1$indv == 2 & vessel_1$date == as.Date("2021-04-15"), NA , vessel_1$treatment)
+# vessel_1 <- vessel_1[complete.cases(vessel_1), ]
+# 
+# ###ver donde hay cambios significativos
+# library(emmeans)
+# library(multcompView)
+# library(multcomp)
+# 
+# qqnorm(log(vessel_1$Area_microm))
+# qqline(log(vessel_1$Area_microm))
+# 
+# vessel_1_aov <- split(vessel_1, vessel_1$date)
+# vessel_1_aov$`2021-11-18` <- NULL
+# vessel_1_aov$`2021-10-14` <- NULL
+# lapply(vessel_1_aov, function(x){
+#   areanewvess_mod <- lm(data = x, log(Area_microm) ~ treatment)
+# areanewvess_mod <- emmeans(areanewvess_mod, ~ treatment)
+#  pairs(areanewvess_mod, adjust = "tukey")
+#   
+# })
+# 
+# ###hago plot
+# 
+# vessel_1$EW_LW <- ifelse(vessel_1$date <=  as.Date("2021-05-27"), "EW", "LW" )
+# vessel_1 <- split(vessel_1 , vessel_1$EW_LW )
 # 
 # 
-# area_porvaso_unido_sinEW <- vessel
-# area_porvaso_unido_sinEW$treatment <- ifelse(area_porvaso_unido_sinEW$date == as.Date("2021-04-01") | area_porvaso_unido_sinEW$date == as.Date("2021-04-15") | area_porvaso_unido_sinEW$date == as.Date("2021-04-29") | area_porvaso_unido_sinEW$date == as.Date("2021-05-13") , NA, area_porvaso_unido_sinEW$treatment )
-# 
-# area_porvaso_unido_sinEW <- area_porvaso_unido_sinEW[complete.cases(area_porvaso_unido_sinEW), ]
-# 
-# ggplot(area_porvaso_unido_sinEW, aes(x= as.factor(date), y= Area_microm, fill= as.factor(treatment)))+
-#            geom_boxplot(show.legend = F)+
+# ggplot()+
+#  geom_boxplot(data= as.data.frame(vessel_1$EW), aes(x= as.factor(date), y= Area_microm/1000000, fill= as.factor(treatment)), show.legend = F)+
+#   geom_boxplot(data= as.data.frame(vessel_1$LW), aes(x= as.factor(date), y= (Area_microm/1000000)*10, fill= as.factor(treatment)), show.legend = F)+
 #   theme(panel.background = element_rect(fill = "white"),
 #           axis.line.x = element_line(colour="black"),
 #           axis.line.y = element_line(colour="black"),
 #         axis.text = element_text(color = "black",size = 12),
 #         axis.ticks.length  = unit(0.1, "cm"))+
-#   ylab(" ")+
-#   scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
-#   xlab("date")
-# 
-# 
-# area_porvaso_unido_EW <- vessel
-# area_porvaso_unido_EW$treatment <- ifelse(area_porvaso_unido_EW$date == as.Date("2021-04-01") | area_porvaso_unido_EW$date == as.Date("2021-04-15") | area_porvaso_unido_EW$date == as.Date("2021-04-29") | area_porvaso_unido_EW$date == as.Date("2021-05-13") , area_porvaso_unido_EW$treatment,  NA )
-# area_porvaso_unido_EW <- area_porvaso_unido_EW[complete.cases(area_porvaso_unido_EW), ]
-# 
-# ggplot(area_porvaso_unido_EW, aes(x= as.factor(date), y= Area_microm, fill= as.factor(treatment)))+
-#            geom_boxplot(show.legend = F)+
-#   theme(panel.background = element_rect(fill = "white"),
-#           axis.line.x = element_line(colour="black"),
-#           axis.line.y = element_line(colour="black"),
-#         axis.text = element_text(color = "black",size = 12),
-#         axis.ticks.length  = unit(0.1, "cm"))+
-#   ylab(" ")+
-#   scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
-#   scale_y_continuous()+
-#   xlab("date")
-# 
-# 
-# ggplot(area_porvaso_unido, aes(x= fecha, y= area_Feret., color = treatment))+
-#            geom_point()+
-#   geom_smooth()+
-#   theme_classic()+
-#   ylab("area por vaso (mm^2)")+
-#   scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
-#   scale_color_manual(values = c("#1E90FF","#FF4040"))
+#   scale_fill_manual(values=c("#00EEEE",'#FF4040')) +
+#   xlab("date")+
+#   scale_y_continuous(
+# name = "area por vaso (mm^2)",
+# sec.axis = sec_axis(~ ./10, name = "area por vaso (mm^2)")
+# )
 
-####parametros hidraulicos
+
+
+  ####parametros hidraulicos
   vessel$D5 <- vessel$Feret_microm^5
   vessel$D4 <- vessel$Feret_microm^4
   vessel$D4_metros <- vessel$Feret_microm/(10^24)
@@ -1302,37 +1302,79 @@ vessel <- lapply(vessel, function(x){
   })
   x <- do.call(rbind, Map(data.frame, x ))
   return(x)
-}) ######calculo del dh, kh, ks, vessel frequency y meanvesselarea
+}) ######calculo del dh, kh, ks, vessel frequency y meanvesselarea 
+
+###CAMBIAR KS EN TOTAL RING AREA coger datos anteriores
 
 vessel <- do.call(rbind, Map(data.frame, vessel))
 
 vessel$treatment <- ifelse(vessel$indv %in% control, "control", "drought")
 
+vessel$treatment <- ifelse(vessel$indv == 2 & vessel$date == as.Date("2021-04-15"), NA , vessel$treatment)
+vessel <- vessel[complete.cases(vessel), ]
+
+######analisis Pos Hoc
+vessel_aov <- split(vessel, vessel$date)
+vessel_aov$`2021-11-18` <- NULL
+vessel_aov$`2021-10-14` <- NULL
+lapply(vessel_aov, function(x){
+  summary(lm(data = x, Ks ~ treatment))})
+
+######plot de Dh y Total vessel area
+vessel$EW_LW <- ifelse(vessel$date <=  as.Date("2021-05-27"), "EW", "LW" )
+vessel <- split(vessel , vessel$EW_LW )
 
 
-ggplot(vessel , aes(x= as.factor(date), y= totalvesselarea, color = treatment))+
-           geom_point()+
+ggplot()+
+  geom_boxplot(data= as.data.frame(vessel$EW), aes(x= as.factor(date), y= totalvesselarea/1000000, fill= as.factor(treatment)), show.legend = F)+
+  geom_boxplot(data= as.data.frame(vessel$LW), aes(x= as.factor(date), y= (totalvesselarea/1000000)*2, fill= as.factor(treatment)), show.legend = F)+
+           geom_boxplot()+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text = element_text(color = "black",size = 12),
+        axis.ticks.length  = unit(0.1, "cm"))+scale_y_continuous(
+name = "EW total vessel area (mm^2)",
+sec.axis = sec_axis(~ ./2, name = "LW total vessel area (mm^2)"))+
+  scale_fill_manual(values = c("#00EEEE","#FF4040"))
+
+ggplot()+
+  geom_boxplot(data= as.data.frame(vessel$EW), aes(x= as.factor(date), y= Kh, fill= as.factor(treatment)), show.legend = F)+
+  geom_boxplot(data= as.data.frame(vessel$LW), aes(x= as.factor(date), y= (Kh/10)*20, fill= as.factor(treatment)), show.legend = F)+
+           geom_boxplot()+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text = element_text(color = "black",size = 12),
+        axis.ticks.length  = unit(0.1, "cm"))+scale_y_continuous(
+name = "EW dh (microm)",
+sec.axis = sec_axis(~ ./20, name = "LW dh (microm)"))+
+  scale_fill_manual(values = c("#00EEEE","#FF4040"))
+
+vessel <- do.call(rbind, Map(data.frame, vessel))
+
+ggplot(data= as.data.frame(vessel), aes(x= date, y= Kh, color= treatment))+
+  geom_point(show.legend = F,alpha= 0.1)+
   geom_smooth()+
-  theme_classic()+
-  ylab("area por vaso (microm^2)")+
-  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
-  scale_color_manual(values = c("#1E90FF","#FF4040"))
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text=element_text(size=12, colour = "black"),
+        axis.title=element_text(size=14))+
+  scale_color_manual(values=c("#0000FF",'#CD3333'))+
+  scale_fill_manual(values=c("#00EEEE",'#FF4040'))
 
+ggplot(data= as.data.frame(vessel), aes(x= date, y= vesselfrequency, color= treatment))+
+  geom_point(show.legend = F,alpha= 0.1)+
+  geom_smooth()
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text=element_text(size=12, colour = "black"),
+        axis.title=element_text(size=14))+
+  scale_color_manual(values=c("#0000FF",'#CD3333'))+
+  scale_fill_manual(values=c("#00EEEE",'#FF4040'))
 
-ggplot(vessel , aes(x= as.factor(date), y= vesselfrequency, color = treatment))+
-           geom_boxplot()+
-  theme_classic()+
-  ylab("vessel frequency")+
-  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
-  scale_color_manual(values = c("#1E90FF","#FF4040"))
-
-
-ggplot(vessel , aes(x= as.factor(date), y= Kh, color = treatment))+
-           geom_boxplot()+
-  theme_classic()+
-  ylab("ks")+
-  scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
-  scale_color_manual(values = c("#1E90FF","#FF4040"))
 
 
 ```
