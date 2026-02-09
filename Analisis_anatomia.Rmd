@@ -225,7 +225,7 @@ modelo_humedad <- gamm4(values ~ Treatment * Depth + s(date1, k = 10),
      random = ~(1|Plot/Point),
      data = Hum_suelo)
 
-###duda si es el random Point o el Point_depth
+
 
 
 summary(modelo_humedad$gam)
@@ -597,7 +597,7 @@ aggregate(Area_Feret~ treatment,LW_EW$LW, se )
 
 ###numero de EW vessel por indv en el area
 
-#######tengo que juntar el area y dividirlo para saber la frecuencia de vasos de EW en el anillo
+#######tengo que juntar el area y dividirlo para saber la densidad de vasos de EW en el anillo
 
 ##data frame con el area del anillo
 Minicore20_21 <- list("year20" = Minicore_fielddata$Minicore_TRW$`2Feb21`, "year21" = Minicore_fielddata$Minicore_TRW$`19Ene22`)
@@ -625,12 +625,9 @@ print(ggplot(data =x, aes(x= as.factor(year), y= vesseldensity, fill= treatment)
 return(x)
 })
 
-  
-
-
 modelo_EW <- lmer(data = as.data.frame(EW_LW_N_vessels$EW), log(vesseldensity) ~ treatment + (1|as.factor(EW_LW_N_vessels$EW$indv))) ###le hago el logaritmo ya que los datos no son normales
 
-summary(modelo_EW) ######no hay diferencia entre tratamientosummary(mPlotodelo_EW) ######no haysummary(modelo_EW) ######no hay diferencia entre tratamientosummary(mPlotodelo_EW) ######no haysummary(modelo_EW) ######no hay diferencia entre tratamientosummary(mPlotodelo_EW) ######no hay diferencia entre tratamiento
+summary(modelo_EW)
 residuos <- residuals(modelo_EW)
 qqnorm(residuos)
 qqline(residuos)
@@ -638,14 +635,9 @@ qqline(residuos)
 aggregate(vesseldensity~ treatment,EW_LW_N_vessels$EW, mean )
 aggregate(vesseldensity~ treatment,EW_LW_N_vessels$EW, se )
 
-
-###############¿hago de mas años?
-
-
 modelo_LW<- lmer(data = as.data.frame(EW_LW_N_vessels$LW) , log(vesseldensity) ~ treatment + (1|as.factor(EW_LW_N_vessels$LW$indv))) ###le hago el logaritmo ya que los datos no son normales
 summary(modelo_LW) ######no hay diferencia entre tratamiento
 r2(modelo_LW)
-########revisarrrrr con Eli
 
 residuos <- residuals(modelo_LW)
 qqnorm(residuos)
@@ -659,23 +651,27 @@ aggregate(vesseldensity~ treatment,EW_LW_N_vessels$LW, se )
 ###TRW
 Minicore20_21$treatment <- ifelse(Minicore20_21$indv %in% control, "control", "drought" )
 
-ggplot(data = Minicore20_21, aes(x= treatment, y= TRW_mean ))+
+ggplot(data = Minicore20_21, aes(x= as.factor(year), y= TRW_mean, fill= as.factor(treatment)))+
   geom_boxplot()
 
-summary(lmer(data = Minicore20_21, TRW_mean ~ treatment + year + (1|indv)))
+summary(lmer(TRW_mean~ treatment + (1|indv), data = Minicore20_21 ))
 
-aggregate(TRW_mean~ treatment + year,Minicore20_21, mean )
-aggregate(TRW_mean~ treatment + year,Minicore20_21, se )
+
+aggregate(TRW_mean~ treatment,Minicore20_21, mean )
+aggregate(TRW_mean~ treatment,Minicore20_21, se )
 
 
 #DBH y H
 Minicore_fielddata$Datos_pie$Tratam <- ifelse(Minicore_fielddata$Datos_pie$indv %in% control, "control", "drought")
+shapiro.test(Minicore_fielddata$Datos_pie$`H_(cm)`)
+shapiro.test(Minicore_fielddata$Datos_pie$`DBH_(cm)`)
+shapiro.test(Minicore_fielddata$Datos_pie$`Diametro_copa_(cm)`)
 
-DBH_model <-  lm(data = as.data.frame(Minicore_fielddata$Datos_pie), `DBH_(cm)` ~ Tratam)
-summary(DBH_model) ##no hay diferencias
 
-H_model <- lm(data = as.data.frame(Minicore_fielddata$Datos_pie),  `H_(cm)` ~ Tratam)
-summary(H_model) ##no hay diferencias
+wilcox.test(`DBH_(cm)`~ Tratam, data= as.data.frame(Minicore_fielddata$Datos_pie), exact = FALSE) ##no hay diferencias
+wilcox.test(`H_(cm)`~ Tratam, data= as.data.frame(Minicore_fielddata$Datos_pie), exact = FALSE) ##no hay diferencias
+wilcox.test(`Diametro_copa_(cm)`~ Tratam, data= as.data.frame(Minicore_fielddata$Datos_pie), exact = FALSE) ##no hay diferencias
+
 
 aggregate(`DBH_(cm)`~ Tratam, as.data.frame(Minicore_fielddata$Datos_pie), mean )
 aggregate(`DBH_(cm)` ~ Tratam,as.data.frame(Minicore_fielddata$Datos_pie), se )
@@ -691,15 +687,9 @@ Ray_area <- pivot_longer(data = Ray_area, cols = c("Ray_2020", "Ray_2021"), name
 
 ggplot()+ geom_boxplot(data = Ray_area, aes(x= Tratam, y= Ray_area))
 
-
-ray_model <- lmer(data= Ray_area, Ray_area ~ Tratam + (1|Árbol)) #########esta bien el random?
-summary(ray_model)
-r2(ray_model)
-########revisarrrrr con Eli
-
-residuos <- residuals(ray_model)
-qqnorm(residuos)
-qqline(residuos)
+shapiro.test(Ray_area$Ray_area) ##no es normal y son valores discretos
+hist(Ray_area$Ray_area)
+wilcox.test(Ray_area ~ Tratam, data= Ray_area, exact = FALSE) ##Hay diferencias
 
 aggregate(Ray_area~ Tratam, Ray_area, mean )
 aggregate(Ray_area~ Tratam, Ray_area, se )
@@ -708,7 +698,6 @@ aggregate(Ray_area~ Tratam, Ray_area, se )
 ###EW vulnerability index
 
 LW_EW_AQ <- lapply(LW_EW, function(x){
-  x$Feret <- x$Feret*1000
   x$D5 <- x$Feret^5
   x$D4 <- x$Feret^4
   x$D4_metros <- x$D4/(10^24)
@@ -718,7 +707,7 @@ LW_EW_AQ <- lapply(LW_EW, function(x){
 
   x <- lapply(x, function(y){
     y <- lapply(y, function(z){
-      z <- data.frame("indv" = unique(z$indv), "N_vessels" = unique(z$N_vessels), "totalvesselarea"= sum(z$Area_Feret), "sumD4"= sum(z$D4), "sumD5"= sum(z$D5), "sumD4_metros"= sum(z$D4_metros), "year"= unique(z$year), "treatment"= unique(z$treatment), "Dmin_microm" = min(z$Feret) )})
+      z <- data.frame("indv" = unique(z$indv), "N_vessels" = unique(z$N_vessels), "totalvesselarea"= sum(z$Area_Feret), "sumD4"= sum(z$D4), "sumD5"= sum(z$D5), "sumD4_metros"= sum(z$D4_metros), "year"= unique(z$year), "treatment"= unique(z$treatment), "Dmin_microm" = min(z$Feret), "Dmean_microm" = mean(z$Feret) )})
     return(y)
   })
   return(x)
@@ -730,8 +719,10 @@ LW_EW_AQ <- lapply(LW_EW_AQ, function(x){
     y <- lapply(y, function(z){
       z <- merge(z, Minicore20_21, by= c("indv", "year", "treatment"))
 
-      z <- data.frame("indv" = z$indv, "year" = z$year, "treatment"= z$treatment,"N_vessels"= z$N_vessels ,"totalvesselarea"= z$totalvesselarea, "meanvesselarea"= z$totalvesselarea/ z$N_vessels, "vesselfrequency"= z$N_vessels/ z$Area, "dh"= z$sumD5/z$sumD4, "Kh"= (((3.14*998.2071)/(128*0.001002))*z$sumD4_metros), "Totalringarea"= z$Area, "vulindex" = z$Dmin/z$N_vessels)
-      z$Ks <- z$Kh/z$Totalringarea
+      z <- data.frame("indv" = z$indv, "year" = z$year, "treatment"= z$treatment,"N_vessels"= z$N_vessels ,"totalvesselarea"= z$totalvesselarea, "meanvesselarea"= z$totalvesselarea/ z$N_vessels, "vesselfrequency"= z$N_vessels/ z$Area, "Dh"= ((z$sumD4)/z$N_vessels)^(1/4)
+, "Totalringarea"= z$Area, "vulindex" = z$Dmean_microm/z$N_vessels)
+      z$kh <- (((3.14*998.2071)/(128*0.001002))*z$vesselfrequency*(z$Dh^4))
+      z$Ks <- z$kh/z$Totalringarea
       
       return(z)
     })
@@ -749,30 +740,24 @@ LW_EW_AQ <- lapply(LW_EW_AQ, function(x){
 }) #####lo uno todo en un data frame
 
 LW_EW_AQ$LW <- LW_EW_AQ$LW[complete.cases(LW_EW_AQ$LW), ]
+LW_EW_AQ$EW$vulindex <- ifelse(LW_EW_AQ$EW$treatment == "drought" & LW_EW_AQ$EW$vulindex >0.15, NA, LW_EW_AQ$EW$vulindex )
+
 
 ggplot()+ geom_boxplot(data= as.data.frame(LW_EW_AQ$EW) , aes(x=as.factor(treatment), y= vulindex))
-ggplot()+ geom_boxplot(data= as.data.frame(LW_EW_AQ$LW) , aes(x=as.factor(treatment), y= vulindex))
-ggplot()+ geom_boxplot(data= as.data.frame(LW_EW_AQ$EW) , aes(x=as.factor(treatment), y=  Ks))
-ggplot()+ geom_boxplot(data= as.data.frame(LW_EW_AQ$LW) , aes(x=as.factor(treatment), y= Ks))
-ggplot()+ geom_boxplot(data= as.data.frame(LW_EW_AQ$EW) , aes(x=as.factor(treatment), y=  Kh))
-ggplot()+ geom_boxplot(data= as.data.frame(LW_EW_AQ$LW) , aes(x=as.factor(treatment), y= Kh))
+ggplot()+ geom_boxplot(data= as.data.frame(LW_EW_AQ$EW) , aes(x=as.factor(treatment), y=  Dh))
+ggplot()+ geom_boxplot(data= as.data.frame(LW_EW_AQ$LW) , aes(x=as.factor(treatment), y= Dh))
 
-vulindex_model_EW <- lm(data= as.data.frame(LW_EW_AQ$EW), log(vulindex) ~ treatment )
-vulindex_model_LW <- lm(data= as.data.frame(LW_EW_AQ$LW), log(vulindex) ~ treatment )
-Ks_model_EW <- lm(data= as.data.frame(LW_EW_AQ$EW), log(Ks) ~ treatment)
-Ks_model_LW <- lm(data= as.data.frame(LW_EW_AQ$LW), log(Ks) ~ treatment )
-Kh_model_EW <- lm(data= as.data.frame(LW_EW_AQ$EW), log(Kh) ~ treatment)
-Kh_model_LW <- lm(data= as.data.frame(LW_EW_AQ$LW), log(Kh) ~ treatment)
+summary(lmer(Dh~ treatment + (1|indv), data = as.data.frame(LW_EW_AQ$EW) ))
+summary(lmer(Dh~ treatment + (1|indv), data = as.data.frame(LW_EW_AQ$LW) ))
+summary(lmer(vulindex~ treatment + (1|indv), data = as.data.frame(LW_EW_AQ$EW) ))
 
-summary(vulindex_model_EW)
-summary(vulindex_model_LW)
-summary(Ks_model_EW)
-summary(Ks_model_LW)
-summary(Kh_model_EW)
-summary(Kh_model_LW)
-residuos <- residuals(vulindex_model_EW)
-qqnorm(residuos)
-qqline(residuos)
+
+aggregate(Dh~ treatment, as.data.frame(LW_EW_AQ$EW), mean )
+aggregate(Dh~ treatment, as.data.frame(LW_EW_AQ$EW), se )
+aggregate(Dh~ treatment,  as.data.frame(LW_EW_AQ$LW), mean )
+aggregate(Dh~ treatment,  as.data.frame(LW_EW_AQ$LW) , se )
+aggregate(vulindex~ treatment ,as.data.frame(LW_EW_AQ$EW), mean )
+aggregate(vulindex~ treatment, as.data.frame(LW_EW_AQ$EW), se )
 
 #####patogenos
 Minicore_fielddata$phytophthora <- split(Minicore_fielddata$phytophthora, Minicore_fielddata$phytophthora$Species)
@@ -781,8 +766,9 @@ Minicore_fielddata$phytophthora$Alcornoque <- NULL
 Minicore_fielddata$phytophthora <- data.frame("indv" = Minicore_fielddata$phytophthora$Quejigo$Tree, "Pci"= Minicore_fielddata$phytophthora$Quejigo$Pci2020, "treatment"= Minicore_fielddata$phytophthora$Quejigo$Drought, "Plot" = Minicore_fielddata$phytophthora$Quejigo$Block )
 ggplot(data = Minicore_fielddata$phytophthora, aes(x=treatment, y=Pci))+ geom_point()
 
-modelo_phytophthora <-  lmer(data = Minicore_fielddata$phytophthora, Pci ~ treatment+ (1|Plot)) ############tambien isSingular ¿lo dejo solo como lm?
-summary(modelo_phytophthora)
+shapiro.test(Minicore_fielddata$phytophthora$Pci) ##no es normal
+
+wilcox.test(Pci ~ treatment,data= Minicore_fielddata$phytophthora, exact= F)
 
 ####usar la distribucion binomial negativa  usando glmmTMB para comparar?¿ es lo que suele usar lorena
 aggregate(Pci ~ treatment, Minicore_fielddata$phytophthora, mean )
@@ -971,7 +957,7 @@ modelo4 <- gamm(
   method = "REML")
 
 
-model.sel(modelo1$lme, modelo2$lme, modelo3$lme,modelo4$lme) ##mejor el modelo 4
+model.sel(modelo1$lme, modelo2$lme, modelo3$lme,modelo4$lme) ##mejor el modelo 3
 
 residuos <- modelo3$lme$residuals
 qqnorm(residuos)
@@ -1125,38 +1111,6 @@ lapply(der_treatment, function(x){
   
 })
 
-###prueba con crecimiento observado sin estandarizar
-# modelo_crecimiento <- gamm(
-#   TRWday_micras ~ treatment +          
-#                   s( date_1, k= 13, bs= "ts", m= 5, by= as.factor(treatment)),      ####le puedo poner bs= "ts" para que empiece en y= 0, pero debe de tener m=10   
-#   random = list(indv = ~1),                       
-#   correlation = corAR1(form = ~ date_1 | indv),   
-#   data = TRW_2021,
-#   method = "REML")
-# 
-# 
-# 
-# newdata <- data.frame(date_1=rep(seq(min(TRW_2021$date_1, na.rm=T),max(TRW_2021$date_1, na.rm=T),length.out = nrow(TRW_2021)), 2),
-#            treatment = rep(c("control", "drought"), each = nrow(TRW_2021)),
-#            indv = 2)
-# 
-# model_growth <- predict(modelo_crecimiento, newdata, se.fit= T)
-# newdata$predict <- model_growth$fit
-# newdata$CI <- model_growth$se.fit
-# 
-# 
-# ggplot()+
-#   geom_point(data = TRW_2021, aes(x= as.Date(date_1), y= TRWday_micras, colour = treatment))+
-#   geom_line(data = newdata, aes(x= as.Date(date_1), y=predict, colour = treatment))+
-#   geom_ribbon(data = newdata, alpha=.4,mapping = aes(x=as.Date(date_1), ymin=predict-CI, ymax=predict+CI, fill=treatment))+
-#     scale_color_manual(values = c("#1E90FF","#FF4040"))+
-#   scale_fill_manual(values = c("#97FFFF","#FF6A6A"))+
-#   theme(panel.background = element_rect(fill = "white"),
-#           axis.line.x = element_line(colour="black"),
-#           axis.line.y = element_line(colour="black"),
-#         axis.text = element_text(color = "black",size = 12),
-#         axis.ticks.length  = unit(0.1, "cm"))+
-#   geom_hline(yintercept= 0)
 
 
 rm(der_control, der_sequia, modelo1, modelo2, modelo3, modelo4, modelo_crecimiento, newdata, newdata_indv, df, der_treatment)
@@ -1298,8 +1252,8 @@ vessel <- lapply(vessel, function(x){
       
 
       y <- data.frame("indv" = y$indv, "date" = y$date,"N_vessels"= y$N_vessels ,"sumD4_metros" = y$sumD4_metros, "sumD4"= y$sumD4,"totalvesselarea"= y$totalvesselarea, "meanvesselarea"= y$totalvesselarea/ y$N_vessels, "vesselfrequency"= y$N_vessels/(y$new_Areamm), "Totalnewareamm"= y$new_Areamm, "Total_ringarea" = y$Area, "vulindex" = y$Dmean_microm/y$N_vessels)
-      y$Dh <- ((y$sumD4^4)/y$N_vessels)^(1/4)
-      y$Kh= (((3.14*998.2071)/(128*0.001002))*y$vesselfrequency*y$Dh)
+      y$Dh <- ((y$sumD4)/y$N_vessels)^(1/4)
+      y$Kh= (((3.14*998.2071)/(128*0.001002))*y$vesselfrequency*(y$Dh^4))
       y$Ks <- y$Kh/y$Total_ringarea
 
     return(y)
@@ -1322,9 +1276,11 @@ ggplot()+
 
 ###ver como se comporta veesel density a lo largo del tiempo y modelo
 vessel$date_1 <- as.numeric(vessel$date)
-
+vessel <- merge(vessel, Minicore_fielddata$Datos_pie[,c("indv", "H_(cm)"), by= "indv", all.x= T])
+vessel$H <- vessel$`H_(cm)`
 veseldensity_model <- gamm(  vesselfrequency ~ treatment +   
-                  s(date_1, k= 10, bs= "ts", m= 1, by= as.factor(treatment)),      ####le puedo poner bs= "ts" para que empiece en y= 0, pero debe de tener m=10   
+                  s(date_1, k= 10, bs= "ts", m= 1, by= as.factor(treatment))+
+                    scale(H),      ####le puedo poner bs= "ts" para que empiece en y= 0, pero debe de tener m=10   
   random = list(indv = ~1),                       
   correlation = corAR1(form = ~ date_1 | indv),   
   data = vessel,
@@ -1341,6 +1297,7 @@ qqline(residuos)
 ######plot vessel density
 newdata <- data.frame(date_1=rep(vessel$date_1, 2),
            treatment = rep(c("control", "drought"), each = nrow(vessel)),
+           H = mean(vessel$H),
            indv = 5)
 
 model_growth <- predict(veseldensity_model, newdata, se.fit= T)
@@ -1375,7 +1332,7 @@ vessel$LW$Ks <- ifelse(vessel$LW$date == as.Date("2021-07-22") & vessel$LW$indv 
 
 Ks_perdate <- ggplot()+
   geom_boxplot(data= as.data.frame(vessel$EW), aes(x= as.factor(date), y= Ks, fill= as.factor(treatment)), show.legend = F)+
-  geom_boxplot(data= as.data.frame(vessel$LW), aes(x= as.factor(date), y= (Ks*10), fill= as.factor(treatment)), show.legend = F)+
+  geom_boxplot(data= as.data.frame(vessel$LW), aes(x= as.factor(date), y= (Ks*40), fill= as.factor(treatment)), show.legend = F)+
   theme(panel.background = element_rect(fill = "white"),
           axis.line.x = element_line(colour="black"),
           axis.line.y = element_line(colour="black"),
@@ -1383,8 +1340,7 @@ Ks_perdate <- ggplot()+
         axis.ticks.length  = unit(0.1, "cm"))+
   scale_y_continuous(
 name = "Ks (ver unidades)",
-sec.axis = sec_axis(~ ./10, name = "Ks (ver unidades)")
-)+
+sec.axis = sec_axis(~ ./40, name = "Ks (ver unidades)"))+
   scale_fill_manual(values = c("#00EEEE","#FF4040"))
 
 
