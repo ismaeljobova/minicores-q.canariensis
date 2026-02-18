@@ -221,21 +221,19 @@ Hum_suelo$Depth_point <- paste0(Hum_suelo$Point, "_", Hum_suelo$Depth)
 
 Hum_suelo[duplicated(Hum_suelo[, c("Plot", "Point", "date1")]), ]
 
-modelo_humedad <- gamm4(values ~ Treatment * Depth + s(date1, k = 10),
-     random = ~(1|Plot/Point),
+modelo_humedad <- gamm(values ~ Treatment * Depth + s(date1, k = 10),
+                       random = list(Plot = ~1, Point= ~1),
      data = Hum_suelo)
 
 
+r.squaredGLMM(modelo_humedad$lme)
 
+gam.check(modelo_humedad$gam)
 
 summary(modelo_humedad$gam)
-
+summary(modelo_humedad$lme)
 
 residuos <- residuals(modelo_humedad$mer)
-qqnorm(residuos)
-qqline(residuos)
-hist(residuos) ###son normales
-plot(modelo_humedad$mer)
 
 ###le hago el predict al modelo
 predict_Humedad <- get_predictions(modelo_humedad$gam, 
@@ -372,14 +370,14 @@ Qca_phenology_EW <- rbind(Qca_phenology_EW$`0`, Qca_phenology_EW$`1`)###########
 ###Para responder la pregunta, usaria el modelo 5 ¿Que opinais?
 
 
-# modelo1 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ date_1 + H_.cm. + Diametro_copa_.cm. + Tratam + (1|indv),  family = binomial) ##29.0
-# modelo2 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1) + scale(Diametro_copa_.cm.)+ Tratam  + (1|indv), family = binomial) ##36.9
-# modelo3 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1) + scale(H_.cm.)+ Tratam  + (1|indv) , family = binomial)
-# modelo4 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1) + scale(H_.cm.)*scale(Diametro_copa_.cm.)+ Tratam  + + (1|indv), family = binomial) ##35.4 
+modelo1 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ date_1 + H_.cm. + Diametro_copa_.cm. + Tratam + (1|indv),  family = binomial) ##29.0
+modelo2 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1) + scale(Diametro_copa_.cm.)+ Tratam  + (1|indv), family = binomial) ##36.9
+modelo3 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1) + scale(H_.cm.)+ Tratam  + (1|indv) , family = binomial)
+modelo4 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1) + scale(H_.cm.)*scale(Diametro_copa_.cm.)+ Tratam  + + (1|indv), family = binomial) ##35.4
 modelo5 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1) +Tratam +(1|indv)  , family = binomial) #30.2
 #########no me converge el modelo 1 y el 4, por lo cual no los utilizaré
 
-# model.sel(modelo1, modelo2, modelo3, modelo5) ###mejor modelo es el modelo 1
+ model.sel(modelo1, modelo2, modelo3,modelo4, modelo5) ###mejor modelo es el modelo 1
 
 
 r2(modelo5)
@@ -439,13 +437,13 @@ Qca_phenology_LW <- rbind(Qca_phenology_LW$`0`, Qca_phenology_LW$`1`)###########
 ##pasa lo mismo que en el apartado anterior pero con la particularidad de que ahora el r2 de los modelos genera issingular y que Conditional R2: 1.000 lo cual es imposible
 ##para responder la pregunta uso solo el modelo 5
 
-# modelo1 <- glmer(data = Qca_phenology_LW, Inicio_LW_bin ~ scale(date_1) + scale(H_.cm.) + scale(Diametro_copa_.cm.) + Tratam  + (1|indv), family = binomial) ##56.3
-# modelo2 <- glmer(data = Qca_phenology_LW, Inicio_LW_bin ~ scale(date_1) + scale(Diametro_copa_.cm.)+ Tratam  + (1|indv), family = binomial) ##54.3
-# modelo3 <- glmer(data = Qca_phenology_LW, Inicio_LW_bin ~ scale(date_1) + scale(H_.cm.)+ Tratam  + (1|indv), family = binomial) ##53.9
-# modelo4 <- glmer(data = Qca_phenology_LW, Inicio_LW_bin ~ scale(date_1) + scale(H_.cm.)*scale(Diametro_copa_.cm.)+ Tratam  + (1|indv), family = binomial) ##58.7
+modelo1 <- glmer(data = Qca_phenology_LW, Inicio_LW_bin ~ scale(date_1) + scale(H_.cm.) + scale(Diametro_copa_.cm.) + Tratam  + (1|indv), family = binomial) ##56.3
+modelo2 <- glmer(data = Qca_phenology_LW, Inicio_LW_bin ~ scale(date_1) + scale(Diametro_copa_.cm.)+ Tratam  + (1|indv), family = binomial) ##54.3
+modelo3 <- glmer(data = Qca_phenology_LW, Inicio_LW_bin ~ scale(date_1) + scale(H_.cm.)+ Tratam  + (1|indv), family = binomial) ##53.9
+modelo4 <- glmer(data = Qca_phenology_LW, Inicio_LW_bin ~ scale(date_1) + scale(H_.cm.)*scale(Diametro_copa_.cm.)+ Tratam  + (1|indv), family = binomial) ##58.7
 modelo5 <- glmer(data = Qca_phenology_LW, Inicio_LW_bin ~ scale(date_1)+ Tratam  + (1|indv), family = binomial) #52.7
 
-# model.sel(modelo1, modelo3, modelo4, modelo5) ###mejor modelo es el modelo 5
+model.sel(modelo1,modelo2, modelo3, modelo4, modelo5) ###mejor modelo es el modelo 5
 
 
 r2(modelo5) ##########esto no es normal que me salga issingular en el r2
@@ -959,7 +957,15 @@ modelo4 <- gamm(
 
 model.sel(modelo1$lme, modelo2$lme, modelo3$lme,modelo4$lme) ##mejor el modelo 3
 
-residuos <- modelo3$lme$residuals
+r.squaredGLMM(modelo2$lme)
+
+gam.check(modelo2$gam)
+
+summary(modelo2$gam)
+summary(modelo2$lme)
+
+
+residuos <- modelo4$lme$residuals
 qqnorm(residuos)
 qqline(residuos)
 hist(residuos) ###son normales
@@ -1264,10 +1270,21 @@ vessel <- lapply(vessel, function(x){
 
 vessel <- do.call(rbind, Map(data.frame, vessel))
 
+###########añadir 0 en los que no ha hay vasos nuevos
+vessel_den <- vessel
+vessel_den <- vessel_den[,c("indv", "date", "vesselfrequency") ]
+newdata <- data.frame("indv"= c(2,3,9,10,19,26,30,30,40) ,
+                      "date"= as.Date(c("2021/05/27","2021/05/13","2022/01/22",
+                                        "2021/05/13","2021/05/27","2021/05/13", "2021/04/29"
+                                        , "2021/05/13","2021/04/29")),
+                      "vesselfrequency"= c(0,0,0,0,0,0,0,0,0))
+
+vessel <- rbind.fill(vessel, newdata)
 vessel$treatment <- ifelse(vessel$indv %in% control, "control", "drought")
 
 vessel$treatment <- ifelse(vessel$indv == 2 & vessel$date == as.Date("2021-04-15"), NA , vessel$treatment)
-vessel <- vessel[complete.cases(vessel), ]
+vessel <- vessel[complete.cases(vessel$treatment), ]
+
 
 ggplot()+
   geom_boxplot(data = vessel, aes(x= as.factor(date), y= Ks, fill= treatment))+
@@ -1278,11 +1295,12 @@ ggplot()+
 vessel$date_1 <- as.numeric(vessel$date)
 vessel <- merge(vessel, Minicore_fielddata$Datos_pie[,c("indv", "H_(cm)"), by= "indv", all.x= T])
 vessel$H <- vessel$`H_(cm)`
+
 veseldensity_model <- gamm(  vesselfrequency ~ treatment +   
                   s(date_1, k= 10, bs= "ts", m= 1, by= as.factor(treatment))+
                     scale(H),      ####le puedo poner bs= "ts" para que empiece en y= 0, pero debe de tener m=10   
   random = list(indv = ~1),                       
-  correlation = corAR1(form = ~ date_1 | indv),   
+  correlation = corAR1(form = ~ date_1|indv),   
   data = vessel,
   method = "REML")
 
@@ -1292,7 +1310,12 @@ qqnorm(residuos)
 qqline(residuos)
 
 
+r.squaredGLMM(veseldensity_model$lme)
 
+gam.check(veseldensity_model$gam)
+
+summary(veseldensity_model$gam)
+summary(veseldensity_model$lme)
 
 ######plot vessel density
 newdata <- data.frame(date_1=rep(vessel$date_1, 2),
@@ -1305,12 +1328,17 @@ newdata$predict <- model_growth$fit
 newdata$CI <- model_growth$se.fit
 dates <- data.frame("date_1" = vessel$date_1, "date" = vessel$date)
 newdata <- merge(dates, newdata, by= "date_1")
-
+newdata$indv <- ifelse((newdata$treatment == "drought" & newdata$date == as.Date("2021-10-14")) | (newdata$treatment == "drought" & newdata$date == as.Date("2021-11-18")) , NA, newdata$indv)
+newdata <- newdata[complete.cases(newdata$indv), ]
+newdata1 <- subset(newdata, newdata$date <= as.Date("2021-10-14"))
+newdata2 <- subset(newdata, newdata$date >= as.Date("2021-10-14"))
 
 vessel_densityplot <- ggplot()+
   geom_point(data = vessel, aes(x= date, y= vesselfrequency, colour = treatment),alpha= 0.3, show.legend = F)+
-  geom_line(data = newdata, aes(x= date, y=predict, colour = treatment), show.legend = F)+
-  geom_ribbon(data = newdata, alpha=.4,mapping = aes(x= date, ymin=predict-CI, ymax=predict+CI, fill=treatment), show.legend = F)+
+  geom_line(data = newdata1, aes(x= date, y=predict, colour = treatment), show.legend = F)+
+  geom_ribbon(data = newdata1, alpha=.4,mapping = aes(x= date, ymin=predict-CI, ymax=predict+CI, fill=treatment), show.legend = F)+
+    geom_line(data = newdata2, aes(x= date, y=predict, colour = treatment), show.legend = F)+
+  geom_ribbon(data = newdata2, alpha=.4,mapping = aes(x= date, ymin=predict-CI, ymax=predict+CI, fill=treatment), show.legend = F)+
   theme(panel.background = element_rect(fill = "white"),
           axis.line.x = element_line(colour="black"),
           axis.line.y = element_line(colour="black"),
@@ -1320,6 +1348,7 @@ vessel_densityplot <- ggplot()+
   scale_fill_manual(values=c("#00EEEE",'#FF4040')) +
   labs( x= "month", y = "vessel density (nº vessel/mm^2)")+
   scale_x_date(date_breaks = "1 month" ,date_labels = "%m")
+
 
 plot_grid(modelo_diference_TRWstandard,vessel_densityplot, ncol = 1 )
 ######plot de ks
