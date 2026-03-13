@@ -370,10 +370,10 @@ Qca_phenology_EW <- rbind(Qca_phenology_EW$`0`, Qca_phenology_EW$`1`)###########
 ###Para responder la pregunta, usaria el modelo 5 ¿Que opinais?
 
 
-modelo1 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ date_1 + H_.cm. + Diametro_copa_.cm. + Tratam + (1|indv),  family = binomial) ##29.0
+modelo1 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ date_1 + H_.cm. + Diametro_copa_.cm. + Tratam + Plot +(1|indv),  family = binomial) ##29.0
 modelo2 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1) + scale(Diametro_copa_.cm.)+ Tratam  + (1|indv), family = binomial) ##36.9
 modelo3 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1) + scale(H_.cm.)+ Tratam  + (1|indv) , family = binomial)
-modelo4 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1) + scale(H_.cm.)*scale(Diametro_copa_.cm.)+ Tratam  + + (1|indv), family = binomial) ##35.4
+modelo4 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1) + scale(H_.cm.)*scale(Diametro_copa_.cm.)+ Tratam  + (1|indv), family = binomial) ##35.4
 modelo5 <- glmer(data = Qca_phenology_EW, Inicio_EW_bin ~ scale(date_1) +Tratam +(1|indv)  , family = binomial) #30.2
 #########no me converge el modelo 1 y el 4, por lo cual no los utilizaré
 
@@ -757,20 +757,62 @@ aggregate(Dh~ treatment,  as.data.frame(LW_EW_AQ$LW) , se )
 aggregate(vulindex~ treatment ,as.data.frame(LW_EW_AQ$EW), mean )
 aggregate(vulindex~ treatment, as.data.frame(LW_EW_AQ$EW), se )
 
-#####patogenos
-Minicore_fielddata$phytophthora <- split(Minicore_fielddata$phytophthora, Minicore_fielddata$phytophthora$Species)
-Minicore_fielddata$phytophthora$Alcornoque <- NULL
+#####patogenos lo hago con la funcion de binomial negativo como en el paper de Serrano 2022
+ggplot(data = Minicore_fielddata$phytophthora, aes(x=Drought, y=Pci2020))+ geom_boxplot()
 
-Minicore_fielddata$phytophthora <- data.frame("indv" = Minicore_fielddata$phytophthora$Quejigo$Tree, "Pci"= Minicore_fielddata$phytophthora$Quejigo$Pci2020, "treatment"= Minicore_fielddata$phytophthora$Quejigo$Drought, "Plot" = Minicore_fielddata$phytophthora$Quejigo$Block )
-ggplot(data = Minicore_fielddata$phytophthora, aes(x=treatment, y=Pci))+ geom_point()
 
-shapiro.test(Minicore_fielddata$phytophthora$Pci) ##no es normal
+summary(glm.nb(data =  Minicore_fielddata$phytophthora, Pci2020 ~ Drought))
 
-wilcox.test(Pci ~ treatment,data= Minicore_fielddata$phytophthora, exact= F)
+
 
 ####usar la distribucion binomial negativa  usando glmmTMB para comparar?¿ es lo que suele usar lorena
-aggregate(Pci ~ treatment, Minicore_fielddata$phytophthora, mean )
-aggregate(Pci ~ treatment, Minicore_fielddata$phytophthora, se )
+aggregate(Pci2020 ~ Drought, Minicore_fielddata$phytophthora, mean )
+aggregate(Pci2020 ~ Drought, Minicore_fielddata$phytophthora, se )
+
+
+
+###correlacion crecimiento con Pci
+media_phithosthora <- as.data.frame(aggregate(data= Minicore_fielddata$phytophthora, Pci2020 ~ Plot, mean))
+
+phithosthora_crec <- merge(Minicore20_21, media_phithosthora, by= "Plot")
+
+ggplot(data = phithosthora_crec, aes(x=Pci2020, y= TRW_mean))+
+  geom_point()+
+  geom_smooth(method = "lm")
+
+cor.test(x= phithosthora_crec$Pci2020, y= phithosthora_crec$TRW_mean, data= phithosthora_crec)
+modelo_crecpato <- lmer(data= phithosthora_crec, TRW_mean  ~ Pci2020 + Plot+ (1|year))  ####describirlo así 
+summary(modelo_crecpato)
+residuos <- residuals(modelo_crecpato)
+qqnorm(residuos)
+qqline(residuos)
+hist(residuos) ###parecen
+r.squaredGLMM(modelo_crecpato)
+
+###PLOT
+newdata <- aggregate(  TRW_mean ~ Plot , mean, data= phithosthora_crec)
+newdata <- data.frame(Pci2020  = unique(phithosthora_crec$Pci2020),
+           TRW_mean = newdata$TRW_mean,
+           Plot = 3,
+           year = 2020)
+
+newdata$predict <- predict(modelo_crecpato, newdata)
+
+
+ggplot()+
+  geom_point(data = phithosthora_crec, aes(x= Pci2020, y= TRW_mean))+
+  geom_line(data = newdata, aes(x= Pci2020, y= predict), color = "red")+
+  theme(panel.background = element_rect(fill = "white"),
+          axis.line.x = element_line(colour="black"),
+          axis.line.y = element_line(colour="black"),
+        axis.text=element_text(size=12, colour = "black"),
+        axis.title=element_text(size=14))+
+  scale_x_continuous(breaks = seq(from= 10, to=130, by=20))
+
+
+
+Minicore_fielddata$phytophthora <- split(Minicore_fielddata$phytophthora, Minicore_fielddata$phytophthora$Species)
+Minicore_fielddata$phytophthora$Alcornoque <- NULL
 
 ```
 
@@ -807,12 +849,10 @@ TRW_2021 <- do.call(rbind, Map(data.frame, TRW_2021)) ####lo uno todo
 
 # cargo los datos de patogenicidad
 
+Minicore_fielddata$phytophthora <- data.frame("indv" = Minicore_fielddata$phytophthora$Quejigo$Tree, "Pci" = Minicore_fielddata$phytophthora$Quejigo$Pci2020)
 TRW_2021 <- merge(TRW_2021,Minicore_fielddata$phytophthora, by=c("indv", "indv"))
 TRW_2021 <- merge(TRW_2021,Minicore_fielddata$Datos_pie, by=c("indv"))
 TRW_2021 <- TRW_2021[!names(TRW_2021) %in% c("Plot.x", "Plot.y","Finca","Tratam","Especie","Árbol")]
-
-
-
 
 ####ahora calculo el TRW diario entre fechas
 TRW_2021 <- split(TRW_2021, TRW_2021$indv)
@@ -924,7 +964,7 @@ modelo1 <- gamm(
   log(diference_TRWstandard + 1) ~ treatment +
                   s( date_1, k= 10, bs= "ts", m= 1, by= as.factor(treatment)) +        # curvas temporal separadas por tratamiento
                   scale(Pci) +                       # efecto  lineal del patógeno
-                  scale(H_.cm.) + scale(Diametro_copa_.cm.),           # covariables lineales
+                  scale(H_.cm.) + scale(Diametro_copa_.cm.) + Plot,           # covariables lineales
   random = list(indv = ~1),                       # interceptos aleatorios por árbol
   correlation = corAR1(form = ~ date_1 | indv),   # autocorrelación temporal por individuo
   data = TRW_2021,
@@ -932,7 +972,7 @@ modelo1 <- gamm(
 modelo2 <- gamm(
   log(diference_TRWstandard + 1) ~ treatment +
                   s( date_1, k= 10, bs= "ts", m= 1, by= as.factor(treatment)) +        
-                  scale(H_.cm.) + scale(Diametro_copa_.cm.),          
+                  scale(H_.cm.) + scale(Diametro_copa_.cm.)+ Plot,          
   random = list(indv = ~1),                       
   correlation = corAR1(form = ~ date_1 | indv),   
   data = TRW_2021,
@@ -940,7 +980,7 @@ modelo2 <- gamm(
 
 modelo3 <- gamm(
   log(diference_TRWstandard + 1) ~ treatment +          
-                  s( date_1, k= 10, bs= "ts", m= 1, by= as.factor(treatment)),      ####le puedo poner bs= "ts" para que empiece en y= 0, pero debe de tener m=10   
+                  s( date_1, k= 10, bs= "ts", m= 1, by= as.factor(treatment))+ Plot,      ####le puedo poner bs= "ts" para que empiece en y= 0, pero debe de tener m=10   
   random = list(indv = ~1),                       
   correlation = corAR1(form = ~ date_1 | indv),   
   data = TRW_2021,
@@ -948,7 +988,7 @@ modelo3 <- gamm(
 modelo4 <- gamm(
   log(diference_TRWstandard + 1) ~ treatment +
                  s( date_1, k= 10, bs= "ts", m= 1, by= as.factor(treatment)) +       
-                  scale(Pci),                    
+                  scale(Pci) + Plot,                    
   random = list(indv = ~1),                       
   correlation = corAR1(form = ~ date_1 | indv),   
   data = TRW_2021,
@@ -975,7 +1015,7 @@ summary(modelo3$gam)
 
 
 newdata <- data.frame(date_1=rep(seq(min(TRW_2021$date_1, na.rm=T),max(TRW_2021$date_1, na.rm=T),length.out = nrow(TRW_2021)), 2),
-           treatment = rep(c("control", "drought"), each = nrow(TRW_2021)),
+           treatment = rep(c("control", "drought"), each = nrow(TRW_2021)), Plot= 3,
            indv = 5)
 
 model_growth <- predict(modelo3, newdata, se.fit= T)
@@ -1020,20 +1060,20 @@ modelo_diference_TRWstandard_1 <-  ggplot()+
 modelo_diference_TRWstandard
 modelo_diference_TRWstandard_1
 ############grafica supporting ###############PREGUNTAR SI LO HAGO DE MANERA GOMPERZT PERO TENGO DUDA DE FALSEAR DATOS TRAS FEBRERO
-modelo_crecimiento <- gamm(  TRWstandard ~ treatment +   
-                  s( date_1, k= 10, bs= "ts", m= 5, by= as.factor(treatment)),      ####le puedo poner bs= "ts" para que empiece en y= 0, pero debe de tener m=10   
+modelo_crecimiento <- gamm(  TRWstandard ~ treatment +  
+                  s( date_1, k= 10, bs= "ts", m= 5, by= as.factor(treatment)) + Plot,      ####le puedo poner bs= "ts" para que empiece en y= 0, pero debe de tener m=10   
   random = list(indv = ~1),                       
   correlation = corAR1(form = ~ date_1 | indv),   
   data = TRW_2021,
   method = "REML")
 
-modelo_crecimiento_indv <- gam(  TRWstandard ~ indv + s( date_1, k= 10, bs= "ts", m= 5, by= as.factor(indv)), data = TRW_2021,method = "REML")
+modelo_crecimiento_indv <- gam(  TRWstandard ~ indv + s( date_1, k= 10, bs= "ts", m= 5, by= as.factor(indv))+ Plot, data = TRW_2021,method = "REML")
 
 
 ###creo los datos para los predicts
 newdata <- data.frame(date_1=rep(seq(min(TRW_2021$date_1, na.rm=T),max(TRW_2021$date_1, na.rm=T),length.out = nrow(TRW_2021)), 2),
            treatment = rep(c("control", "drought"), each = nrow(TRW_2021)),
-           indv = 2)
+           indv = 2,Plot= 3)
 indv <- unique(TRW_2021$indv)
 
 x <- 0
@@ -1295,12 +1335,12 @@ ggplot()+
 vessel$date_1 <- as.numeric(vessel$date)
 vessel <- merge(vessel, Minicore_fielddata$Datos_pie[,c("indv", "H_(cm)"), by= "indv", all.x= T])
 vessel$H <- vessel$`H_(cm)`
-
+Plot_df <- data.frame(Plot = Minicore20_21$Plot, indv = Minicore20_21$indv)
+vessel <- merge(Plot_df, vessel, by= "indv")
 veseldensity_model <- gamm(  vesselfrequency ~ treatment +   
                   s(date_1, k= 10, bs= "ts", m= 1, by= as.factor(treatment))+
-                    scale(H),      ####le puedo poner bs= "ts" para que empiece en y= 0, pero debe de tener m=10   
-  random = list(indv = ~1),                       
-  correlation = corAR1(form = ~ date_1|indv),   
+                    scale(H) + Plot,      ####le puedo poner bs= "ts" para que empiece en y= 0, pero debe de tener m=10   
+  random = list(indv = ~1),   
   data = vessel,
   method = "REML")
 
@@ -1321,7 +1361,8 @@ summary(veseldensity_model$lme)
 newdata <- data.frame(date_1=rep(vessel$date_1, 2),
            treatment = rep(c("control", "drought"), each = nrow(vessel)),
            H = mean(vessel$H),
-           indv = 5)
+           indv = 5,
+           Plot = 3)
 
 model_growth <- predict(veseldensity_model, newdata, se.fit= T)
 newdata$predict <- model_growth$fit
